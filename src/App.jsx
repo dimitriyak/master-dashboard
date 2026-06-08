@@ -434,16 +434,25 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
                       {w.tasks.map((task, i) => {
                         const key = `${w.week}-${i}`;
                         const isDone = hwChecked[key];
+                        const taskText = typeof task === "string" ? task : task.text;
+                        const taskDesc = typeof task === "object" ? task.description : null;
                         return (
-                          <label key={i} onClick={() => toggleHw(key)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0", cursor: "pointer", borderBottom: i < w.tasks.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                            <div style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 2, border: isDone ? "none" : `1px solid ${C.border}`, background: isDone ? "#76FF03" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {isDone && <span style={{ color: "#000", fontSize: 9, fontWeight: 900 }}>✓</span>}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <span style={{ color: isDone ? C.muted : "rgba(255,255,255,0.7)", fontSize: 12, textDecoration: isDone ? "line-through" : "none" }}>{task}</span>
-                              {w.week === 0 && i === 0 && <InstructionBlock color="#00E5FF" />}
-                            </div>
-                          </label>
+                          <div key={i} style={{ borderBottom: i < w.tasks.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                            <label onClick={() => toggleHw(key)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0 6px", cursor: "pointer" }}>
+                              <div style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 2, border: isDone ? "none" : `1px solid ${C.border}`, background: isDone ? "#76FF03" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                {isDone && <span style={{ color: "#000", fontSize: 9, fontWeight: 900 }}>✓</span>}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <span style={{ color: isDone ? C.muted : "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 500, textDecoration: isDone ? "line-through" : "none", lineHeight: 1.4 }}>{taskText}</span>
+                                {w.week === 0 && i === 0 && <InstructionBlock color="#00E5FF" />}
+                              </div>
+                            </label>
+                            {taskDesc && (
+                              <div style={{ marginLeft: 25, marginBottom: 10, padding: "8px 12px", background: "rgba(0,229,255,0.04)", border: "1px solid rgba(0,229,255,0.1)", borderRadius: 8, fontSize: 11, color: "rgba(255,255,255,0.45)", lineHeight: 1.6 }}>
+                                {taskDesc}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
