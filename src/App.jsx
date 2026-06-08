@@ -257,6 +257,33 @@ function PositionCard({ pos, onUpdate }) {
   );
 }
 
+function TaskRow({ taskText, taskDesc, isDone, onToggle, isLast, showLegacy }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderBottom: isLast ? "none" : `1px solid ${C.border}` }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0 6px" }}>
+        <button onClick={onToggle} style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 2, border: isDone ? "none" : `1px solid ${C.border}`, background: isDone ? "#76FF03" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+          {isDone && <span style={{ color: "#000", fontSize: 9, fontWeight: 900 }}>✓</span>}
+        </button>
+        <div style={{ flex: 1 }}>
+          <span onClick={onToggle} style={{ color: isDone ? C.muted : "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 500, textDecoration: isDone ? "line-through" : "none", lineHeight: 1.4, cursor: "pointer" }}>{taskText}</span>
+          {showLegacy && <InstructionBlock color="#00E5FF" />}
+        </div>
+        {taskDesc && (
+          <button onClick={() => setOpen(o => !o)} style={{ flexShrink: 0, background: open ? "rgba(0,229,255,0.12)" : "rgba(0,229,255,0.05)", border: "1px solid rgba(0,229,255,0.2)", borderRadius: 5, color: "#00E5FF", fontSize: 9, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.06em", whiteSpace: "nowrap", marginTop: 1 }}>
+            {open ? "▲ скрыть" : "▼ как делать"}
+          </button>
+        )}
+      </div>
+      {taskDesc && open && (
+        <div style={{ marginLeft: 25, marginBottom: 10, padding: "10px 12px", background: "rgba(0,229,255,0.04)", border: "1px solid rgba(0,229,255,0.12)", borderRadius: 8, fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>
+          {taskDesc}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const [tab, setTab] = useState("portfolio");
   const [openWeek, setOpenWeek] = useState(0);
@@ -437,22 +464,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
                         const taskText = typeof task === "string" ? task : task.text;
                         const taskDesc = typeof task === "object" ? task.description : null;
                         return (
-                          <div key={i} style={{ borderBottom: i < w.tasks.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                            <label onClick={() => toggleHw(key)} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0 6px", cursor: "pointer" }}>
-                              <div style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 2, border: isDone ? "none" : `1px solid ${C.border}`, background: isDone ? "#76FF03" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                {isDone && <span style={{ color: "#000", fontSize: 9, fontWeight: 900 }}>✓</span>}
-                              </div>
-                              <div style={{ flex: 1 }}>
-                                <span style={{ color: isDone ? C.muted : "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 500, textDecoration: isDone ? "line-through" : "none", lineHeight: 1.4 }}>{taskText}</span>
-                                {w.week === 0 && i === 0 && <InstructionBlock color="#00E5FF" />}
-                              </div>
-                            </label>
-                            {taskDesc && (
-                              <div style={{ marginLeft: 25, marginBottom: 10, padding: "8px 12px", background: "rgba(0,229,255,0.04)", border: "1px solid rgba(0,229,255,0.1)", borderRadius: 8, fontSize: 11, color: "rgba(255,255,255,0.45)", lineHeight: 1.6 }}>
-                                {taskDesc}
-                              </div>
-                            )}
-                          </div>
+                          <TaskRow key={i} taskText={taskText} taskDesc={taskDesc} isDone={isDone} onToggle={() => toggleHw(key)} isLast={i === w.tasks.length - 1} showLegacy={w.week === 0 && i === 0} />
                         );
                       })}
                     </div>
