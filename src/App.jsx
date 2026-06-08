@@ -46,7 +46,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, onNavigate }) {
   const defiCurrent = defiPositions.reduce((s, p) => s + p.current, 0);
   const defiAllocated = defiPositions.reduce((s, p) => s + p.allocated, 0);
   const defiPnl = defiCurrent - defiAllocated;
-  const defiNextTask = (() => { for (const w of DEFI_WEEKS) { const idx = w.tasks.findIndex((_, i) => !defiHw[`${w.week}-${i}`]); if (idx !== -1) return w.tasks[idx]; } return null; })();
+  const defiNextTask = (() => { for (const w of DEFI_WEEKS) { const idx = w.tasks.findIndex((_, i) => !defiHw[`${w.week}-${i}`]); if (idx !== -1) { const t = w.tasks[idx]; return typeof t === "string" ? t : t.text; } } return null; })();
 
   const wayDone = wayData.tasks.filter(t => t.done).length;
   const wayProgress = wayData.currentAmount / 1000000 * 100;
