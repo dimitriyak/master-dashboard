@@ -287,6 +287,21 @@ function TaskRow({ taskText, taskDesc, isDone, onToggle, isLast, showLegacy }) {
 function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const [tab, setTab] = useState("portfolio");
   const [openWeek, setOpenWeek] = useState(0);
+  const [notes, setNotes] = useState(() => ls("defi_notes", []));
+  const [noteInput, setNoteInput] = useState("");
+  const [noteTag, setNoteTag] = useState("general");
+
+  const saveNote = () => {
+    const text = noteInput.trim();
+    if (!text) return;
+    const next = [{ id: Date.now(), text, tag: noteTag, date: new Date().toLocaleDateString("ru-RU") }, ...notes];
+    setNotes(next); lsSet("defi_notes", next);
+    setNoteInput("");
+  };
+  const deleteNote = (id) => {
+    const next = notes.filter(n => n.id !== id);
+    setNotes(next); lsSet("defi_notes", next);
+  };
   const [time, setTime] = useState(new Date());
   const [aiNews, setAiNews] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
@@ -405,7 +420,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
       </div>
 
       <div style={{ display: "flex", gap: 4, padding: "12px 28px", borderBottom: `1px solid ${C.border}` }}>
-        {[{ id: "portfolio", label: "ПОРТФЕЛЬ" }, { id: "homework", label: "ДОМАШКА" }, { id: "radar", label: "AI РАДАР" }].map(t => (
+        {[{ id: "portfolio", label: "ПОРТФЕЛЬ" }, { id: "homework", label: "ДОМАШКА" }, { id: "notes", label: "ЗАМЕТКИ" }, { id: "radar", label: "AI РАДАР" }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, maxWidth: 140, background: tab === t.id ? "rgba(0,229,255,0.08)" : "transparent", border: tab === t.id ? "1px solid rgba(0,229,255,0.2)" : `1px solid ${C.border}`, borderRadius: 8, color: tab === t.id ? "#00E5FF" : C.muted, fontSize: 10, padding: "8px 0", cursor: "pointer", letterSpacing: "0.1em" }}>
             {t.label}
           </button>
@@ -474,6 +489,65 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
             })}
           </div>
         )}
+
+        {tab === "notes" && (() => {
+          const NOTE_TAGS = [
+            { id: "general", label: "Общее", color: "#00E5FF" },
+            { id: "apy", label: "APY / ставки", color: "#76FF03" },
+            { id: "protocol", label: "Протокол", color: "#7C5CFC" },
+            { id: "risk", label: "Риск", color: "#FF1744" },
+            { id: "idea", label: "Идея", color: "#FFD700" },
+          ];
+          const tagColor = (id) => NOTE_TAGS.find(t => t.id === id)?.color || "#00E5FF";
+          return (
+            <div>
+              {/* Инпут */}
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.15em", marginBottom: 10 }}>НОВАЯ ЗАМЕТКА</div>
+                <textarea
+                  value={noteInput}
+                  onChange={e => setNoteInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveNote(); }}
+                  placeholder="Запиши APY, наблюдение, идею или ссылку... (Cmd+Enter чтобы сохранить)"
+                  rows={3}
+                  style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", color: C.text, fontSize: 12, lineHeight: 1.6, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+                />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                  {NOTE_TAGS.map(t => (
+                    <button key={t.id} onClick={() => setNoteTag(t.id)} style={{ padding: "3px 10px", borderRadius: 20, fontSize: 10, cursor: "pointer", fontWeight: 600, background: noteTag === t.id ? t.color + "22" : "transparent", border: `1px solid ${noteTag === t.id ? t.color : C.border}`, color: noteTag === t.id ? t.color : C.muted, transition: "all 0.15s" }}>
+                      {t.label}
+                    </button>
+                  ))}
+                  <button onClick={saveNote} style={{ marginLeft: "auto", padding: "5px 16px", borderRadius: 8, background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00E5FF", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.05em" }}>
+                    + Сохранить
+                  </button>
+                </div>
+              </div>
+
+              {/* Список */}
+              {notes.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 12 }}>Заметок пока нет — сохрани первую выше</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {notes.map(note => (
+                    <div key={note.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: tagColor(note.tag) + "18", color: tagColor(note.tag), border: `1px solid ${tagColor(note.tag)}30` }}>
+                            {NOTE_TAGS.find(t => t.id === note.tag)?.label || note.tag}
+                          </span>
+                          <span style={{ fontSize: 9, color: C.muted }}>{note.date}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{note.text}</div>
+                      </div>
+                      <button onClick={() => deleteNote(note.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1, flexShrink: 0 }} title="Удалить">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {tab === "radar" && (
           <div style={{ background: "rgba(0,229,255,0.03)", border: "1px solid rgba(0,229,255,0.12)", borderRadius: 12, padding: 20 }}>
