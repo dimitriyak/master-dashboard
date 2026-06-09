@@ -25,12 +25,14 @@ const NITTER_INSTANCES = [
 ];
 
 // Портфель пользователя — обновляй по мере реального входа в позиции
+// trackable: true  → APY есть в DeFiLlama, будем сравнивать с рынком
+// trackable: false → нет в DeFiLlama (BTCfi rewards, airdrop, gold collateral) — это НОРМАЛЬНО
 const USER_PORTFOLIO = [
-  { protocol: "Aave V3",         chain: "Base",     asset: "USDC",      allocated: 400, type: "lending" },
-  { protocol: "Aerodrome",       chain: "Base",     asset: "USDC/WETH", allocated: 400, type: "lp"      },
-  { protocol: "Lombard",         chain: "Ethereum", asset: "LBTC",      allocated: 300, type: "btcfi"   },
-  { protocol: "Aave V3",         chain: "Ethereum", asset: "PAXG",      allocated: 300, type: "gold"    },
-  { protocol: "Sonic/Berachain", chain: "Multi",    asset: "Various",   allocated: 300, type: "new"     },
+  { protocol: "Aave V3",         chain: "Base",     asset: "USDC",      allocated: 400, type: "lending", trackable: true,  note: "" },
+  { protocol: "Aerodrome",       chain: "Base",     asset: "USDC/WETH", allocated: 400, type: "lp",      trackable: true,  note: "" },
+  { protocol: "Lombard",         chain: "Ethereum", asset: "LBTC",      allocated: 300, type: "btcfi",   trackable: true,  note: "BTCfi staking, APY ~0.3% base + нативные BTC rewards" },
+  { protocol: "Aave V3",         chain: "Ethereum", asset: "PAXG",      allocated: 300, type: "gold",    trackable: false, note: "PAXG используется как коллатерал, supply APY ~0% (нет заёмщиков)" },
+  { protocol: "Sonic/Berachain", chain: "Multi",    asset: "Various",   allocated: 300, type: "new",     trackable: false, note: "Аирдроп/поинты стратегия — reward не в APY, вручную" },
 ];
 
 // Протоколы для мониторинга APY (конкуренты + наши)
@@ -38,7 +40,7 @@ const WATCH_PROJECTS  = [
   "aave-v3", "morpho", "morpho-blue",
   "aerodrome-v1", "aerodrome-slipstream",   // правильные названия
   "compound-v3", "fluid", "fluid-dex", "fluid-lite",
-  "spark", "pendle", "rings", "lombard", "kamino",
+  "spark", "pendle", "rings", "lombard-lbtc", "kamino",  // lombard-lbtc — правильное название
   "velodrome", "uniswap-v3",
 ];
 const WATCH_SYMBOLS   = [
@@ -111,14 +113,15 @@ async function fetchAPYs() {
     const data = await res.json();
     const pools = data.data;
 
-    // 1. Конкретные позиции портфеля — всегда включаем
+    // 1. Конкретные позиции портфеля — всегда включаем (только trackable)
+    // PAXG и Sonic/Berachain исключены — у них нет APY в DeFiLlama, это нормально
     const PORTFOLIO_POOLS = [
       { project: "aave-v3",              chain: "Base",     symbol: "USDC"      },
       { project: "aave-v3",              chain: "Base",     symbol: "WETH"      },
-      { project: "aave-v3",              chain: "Ethereum", symbol: "PAXG"      },
       { project: "aerodrome-slipstream", chain: "Base",     symbol: "WETH-USDC" },
       { project: "aerodrome-v1",         chain: "Base",     symbol: "WETH-USDC" },
-      { project: "morpho-blue",          chain: "Base",     symbol: null        }, // любой символ
+      { project: "lombard-lbtc",         chain: "Ethereum", symbol: "LBTC"      }, // lombard-lbtc — правильное имя
+      { project: "morpho-blue",          chain: "Base",     symbol: null        },
       { project: "morpho-blue",          chain: "Ethereum", symbol: null        },
     ];
 
@@ -132,14 +135,14 @@ async function fetchAPYs() {
       portfolioPools.push(...matches);
     }
 
-    // 2. Возможности — разумный TVL (>$500K) и APY до 200%
+    // 2. Возможности — TVL > $3M (фильтруем мусорные пулы) и APY до 150%
     const opportunities = pools
       .filter(p =>
         WATCH_CHAINS.includes(p.chain) &&
         WATCH_PROJECTS.includes(p.project) &&
         WATCH_SYMBOLS.some(s => p.symbol?.toUpperCase().includes(s)) &&
-        (p.tvlUsd || 0) > 500_000 &&
-        (p.apy || 0) < 200 &&
+        (p.tvlUsd || 0) > 3_000_000 &&
+        (p.apy || 0) < 150 &&
         (p.apy || 0) > 3
       )
       .sort((a, b) => (b.apy || 0) - (a.apy || 0))
@@ -201,13 +204,21 @@ async function buildFeed() {
 // ── AI Brief generation ──────────────────────────────────────────────────────
 
 async function generateBrief(newsItems, apyData, env) {
-  const portfolioCtx = USER_PORTFOLIO
+  // Разбиваем портфель на trackable и manual
+  const trackablePositions = USER_PORTFOLIO.filter(p => p.trackable);
+  const manualPositions    = USER_PORTFOLIO.filter(p => !p.trackable);
+
+  const portfolioTrackableCtx = trackablePositions
     .map(p => `- ${p.protocol} на ${p.chain}: $${p.allocated} в ${p.asset}`)
+    .join("\n");
+
+  const portfolioManualCtx = manualPositions
+    .map(p => `- ${p.protocol} на ${p.chain}: $${p.allocated} в ${p.asset} [${p.note}]`)
     .join("\n");
 
   const apyCtx = apyData.length > 0
     ? apyData.slice(0, 20)
-        .map(a => `- ${a.project} (${a.chain}) ${a.symbol}: ${a.apy}% APY${a.tvlUsd ? ` TVL ${a.tvlUsd}` : ""}`)
+        .map(a => `- ${a.project} (${a.chain}) ${a.symbol}: ${a.apy}% APY, TVL ${a.tvlUsd}`)
         .join("\n")
     : "Данные APY временно недоступны";
 
@@ -215,22 +226,26 @@ async function generateBrief(newsItems, apyData, env) {
     .map(n => `- ${n.source}: ${n.title}`)
     .join("\n");
 
-  const prompt = `Ты персональный DeFi советник. Твоя задача — дать конкретные, actionable рекомендации по портфелю на основе актуальных данных.
+  const prompt = `Ты персональный DeFi советник. Твоя задача — дать конкретные, actionable рекомендации.
 
-МОЙ ПОРТФЕЛЬ (план, пока не все позиции открыты):
-${portfolioCtx}
+МОЙ ПОРТФЕЛЬ — позиции с данными APY в DeFiLlama (сравнивай с рынком):
+${portfolioTrackableCtx}
 
-АКТУАЛЬНЫЕ APY НА РЫНКЕ ПРЯМО СЕЙЧАС:
+МОЙ ПОРТФЕЛЬ — позиции БЕЗ данных в DeFiLlama (это НОРМАЛЬНО, не флагировать как риск):
+${portfolioManualCtx}
+
+АКТУАЛЬНЫЕ APY НА РЫНКЕ ПРЯМО СЕЙЧАС (из DeFiLlama):
 ${apyCtx}
 
 ПОСЛЕДНИЕ НОВОСТИ DeFi:
 ${newsCtx}
 
-Правила ответа:
+Правила:
 - Только конкретика: протоколы, цифры, суммы
-- Никакой воды и очевидных вещей
-- Если данных APY нет — не придумывай, скажи "проверь вручную"
-- Учитывай что портфель в процессе формирования (позиции ещё не открыты)
+- НЕ отмечай как "срочно" позиции из секции "БЕЗ данных в DeFiLlama" — у них нет APY по природе актива (PAXG как коллатерал, BTCfi, аирдроп стратегии)
+- Urgent = только реальные риски (hack, депег, ликвидность) или значительно лучшая альтернатива (+2x APY с сопоставимым риском)
+- thisWeek = перераспределение, если разница APY > 1.5x при сопоставимом риске
+- Используй реальные цифры APY из данных выше
 
 Верни ТОЛЬКО валидный JSON без markdown:
 {
@@ -239,7 +254,7 @@ ${newsCtx}
     {"action": "конкретное действие", "reason": "почему важно сейчас", "impact": "high|medium|low"}
   ],
   "thisWeek": [
-    {"action": "что сделать на этой неделе", "reason": "обоснование с цифрами", "impact": "high|medium|low"}
+    {"action": "что сделать на этой неделе", "reason": "обоснование с цифрами APY", "impact": "high|medium|low"}
   ],
   "hold": [
     {"position": "название позиции", "reason": "почему держать"}
