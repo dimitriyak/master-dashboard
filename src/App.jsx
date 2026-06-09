@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom'
 import {
   STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL,
   DEFI_WEEKS, BYBIT_STEPS, TYPE_ICONS, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, X_ACCOUNTS, pill
@@ -59,69 +59,82 @@ function Overview({ wishState, defiPositions, defiHw, wayData, onNavigate }) {
   ];
 
   return (
-    <div style={{ padding: "32px 28px", maxWidth: 1000, margin: "0 auto" }}>
-      <div style={{ marginBottom: 36 }}>
-        <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.2em", textTransform: "uppercase", marginBottom: 8 }}>Мастер-дашборд</div>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: C.text, letterSpacing: "-0.03em", marginBottom: 6 }}>Обзор всех направлений</h1>
-        <p style={{ color: C.muted, fontSize: 13 }}>{new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</p>
+    <div style={{ padding: "40px 28px", maxWidth: 960, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 40 }}>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>
+          {new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}
+        </div>
+        <h1 style={{ fontSize: 30, fontWeight: 700, color: C.text, letterSpacing: "-0.02em", margin: 0 }}>Dashboard</h1>
       </div>
+
+      {/* Progress strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 32 }}>
         {[
           { label: "1M$ прогресс", pct: Math.round(wayProgress), color: "#FFD700" },
           { label: "Цели выполнены", pct: wishPct, color: "#7C5CFC" },
-          { label: "DeFi учёба", pct: defiHwPct, color: "#00E5FF" },
+          { label: "Crypto учёба", pct: defiHwPct, color: "#00E5FF" },
         ].map(s => (
-          <div key={s.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 18px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 8, minHeight: 28 }}>{s.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: s.color, letterSpacing: "-0.02em", marginBottom: 8 }}>{s.pct}%</div>
+          <div key={s.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "16px 20px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: C.muted }}>{s.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.pct}%</div>
+            </div>
             <div style={{ height: 3, background: C.border, borderRadius: 2, overflow: "hidden" }}>
               <div style={{ width: `${s.pct}%`, height: "100%", background: s.color, borderRadius: 2, transition: "width 0.6s ease" }} />
             </div>
           </div>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}>
+
+      {/* Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
         {cards.map(card => (
           <button key={card.id} onClick={() => onNavigate(card.id)}
-            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "22px", textAlign: "left", cursor: "pointer", transition: "all 0.25s", position: "relative", overflow: "hidden" }}
-            onMouseEnter={e => { e.currentTarget.style.border = `1px solid ${card.color}55`; e.currentTarget.style.boxShadow = `0 0 30px ${card.color}18`; e.currentTarget.style.transform = "translateY(-2px)"; }}
-            onMouseLeave={e => { e.currentTarget.style.border = `1px solid ${C.border}`; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "24px", textAlign: "left", cursor: "pointer", transition: "border-color 0.2s, transform 0.2s", position: "relative", overflow: "hidden" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = `${card.color}40`; e.currentTarget.style.transform = "translateY(-2px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "translateY(0)"; }}
           >
-            <div style={{ position: "absolute", top: 0, right: 0, width: 80, height: 80, background: `radial-gradient(circle, ${card.color}18 0%, transparent 70%)`, pointerEvents: "none" }} />
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: card.color, letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 700 }}>{card.label}</div>
-              <span style={{ fontSize: 18, color: card.color }}>{card.icon}</span>
+            {/* Color accent top bar */}
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: card.color, opacity: 0.6, borderRadius: "12px 12px 0 0" }} />
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+              <div style={{ fontSize: 12, color: C.muted }}>{card.subtitle}</div>
+              <span style={{ fontSize: 20 }}>{card.icon}</span>
             </div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 4 }}>{card.title}</div>
-            <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>{card.subtitle}</div>
-            <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden", marginBottom: 14 }}>
-              <div style={{ width: `${card.progress}%`, height: "100%", background: card.color, borderRadius: 2, transition: "width 0.6s ease" }} />
-            </div>
-            <div style={{ minHeight: 52, marginBottom: 14 }}>
-              {card.nextTask ? (
-                <div style={{ background: card.color + "11", border: `1px solid ${card.color}22`, borderRadius: 8, padding: "7px 10px" }}>
-                  <div style={{ fontSize: 9, color: card.color, letterSpacing: "0.1em", marginBottom: 3, textTransform: "uppercase" }}>▶ Следующий шаг</div>
-                  <div style={{ fontSize: 11, color: C.text, lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{card.nextTask}</div>
-                </div>
-              ) : (
-                <div style={{ background: card.color + "08", border: `1px solid ${card.color}15`, borderRadius: 8, padding: "7px 10px" }}>
-                  <div style={{ fontSize: 9, color: card.color, letterSpacing: "0.1em", marginBottom: 3, textTransform: "uppercase" }}>▶ Следующий шаг</div>
-                  <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>Все задачи выполнены 🎉</div>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{card.stat1.label}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: card.color }}>{card.stat1.val}</div>
+
+            <div style={{ fontSize: 20, fontWeight: 700, color: C.text, marginBottom: 16 }}>{card.title}</div>
+
+            {/* Progress */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: C.muted }}>Прогресс</span>
+                <span style={{ fontSize: 12, color: card.color, fontWeight: 600 }}>{Math.round(card.progress)}%</span>
               </div>
-              <div style={{ width: 1, background: C.border }} />
-              <div>
-                <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{card.stat2.label}</div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{card.stat2.val}</div>
+              <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ width: `${card.progress}%`, height: "100%", background: card.color, borderRadius: 2, transition: "width 0.6s ease" }} />
               </div>
             </div>
-            <div style={{ position: "absolute", bottom: 14, right: 18, fontSize: 11, color: card.color, opacity: 0.6 }}>→</div>
+
+            {/* Next task */}
+            {card.nextTask && (
+              <div style={{ borderLeft: `2px solid ${card.color}`, paddingLeft: 12, marginBottom: 18 }}>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>Следующий шаг</div>
+                <div style={{ fontSize: 13, color: C.text, lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{card.nextTask}</div>
+              </div>
+            )}
+
+            {/* Stats */}
+            <div style={{ display: "flex", gap: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{card.stat1.label}</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: card.color }}>{card.stat1.val}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{card.stat2.label}</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>{card.stat2.val}</div>
+              </div>
+            </div>
           </button>
         ))}
       </div>
@@ -157,8 +170,7 @@ function WishesDashboard({ wishState, setWishState }) {
     <div style={{ padding: "24px 28px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
         <div>
-          <div style={{ fontSize: 11, color: "#7C5CFC", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 2 }}>ЛИЧНОЕ</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>Мои хотелки</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Wishlist</div>
         </div>
         <div style={{ display: "flex", gap: 16 }}>
           {[{ label: "всего", val: total, color: C.text }, { label: "выполнено", val: done, color: "#5cfcb8" }, { label: "осталось", val: total - done, color: "#fcb85c" }].map(s => (
@@ -285,7 +297,8 @@ function TaskRow({ taskText, taskDesc, isDone, onToggle, isLast, showLegacy }) {
 }
 
 function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
-  const [tab, setTab] = useState("portfolio");
+  const { tab = "portfolio" } = useParams();
+  const navigate = useNavigate();
   const [openWeek, setOpenWeek] = useState(0);
   const [notes, setNotes] = useState(() => ls("defi_notes", []));
   const [noteInput, setNoteInput] = useState("");
@@ -345,34 +358,30 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${C.border}` }}>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Крипто</div>
-          <div style={{ fontSize: 12, color: C.muted }}>Портфель · Учёба · Радар</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Crypto</div>
         </div>
         <div style={{ fontFamily: "monospace", fontSize: 13, color: "#00E5FF" }}>{time.toLocaleTimeString("ru-RU")}</div>
       </div>
 
-      <div style={{ padding: "12px 28px", background: "rgba(255,215,0,0.03)", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: bybit ? "#76FF03" : bybitLoading ? "#FFD700" : "#FF1744", boxShadow: `0 0 6px ${bybit ? "#76FF03" : bybitLoading ? "#FFD700" : "#FF1744"}` }} />
-          <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.12em" }}>BYBIT · UNIFIED</span>
+      <div style={{ padding: "10px 28px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 5, height: 5, borderRadius: "50%", background: bybit ? "#00E5FF" : bybitLoading ? C.muted : "#FF6450", flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: C.muted }}>Bybit</span>
         </div>
-        {bybitLoading && <span style={{ fontSize: 11, color: "#FFD700" }}>загружаю...</span>}
-        {bybitError && <span style={{ fontSize: 11, color: "#FF1744" }}>Ошибка: {bybitError}</span>}
+        {bybitLoading && <span style={{ fontSize: 12, color: C.muted }}>загружаю...</span>}
+        {bybitError && <span style={{ fontSize: 12, color: "#FF6450" }}>Ошибка: {bybitError}</span>}
         {bybit && (
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 11, color: C.muted }}>Итого:</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "#FFD700" }}>${bybit.totalEquity.toFixed(2)}</span>
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#00E5FF" }}>${bybit.totalEquity.toFixed(2)}</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {bybit.coins.map(c => (
-                <div key={c.coin} style={{ background: "rgba(255,215,0,0.06)", border: "1px solid rgba(255,215,0,0.15)", borderRadius: 6, padding: "3px 10px", display: "flex", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 10, color: "#FFD700", fontWeight: 700 }}>{c.coin}</span>
-                  <span style={{ fontSize: 10, color: C.muted }}>${parseFloat(c.usdValue).toFixed(2)}</span>
+                <div key={c.coin} style={{ background: "rgba(0,229,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 10px", display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#00E5FF", fontWeight: 600 }}>{c.coin}</span>
+                  <span style={{ fontSize: 12, color: C.muted }}>${parseFloat(c.usdValue).toFixed(2)}</span>
                 </div>
               ))}
             </div>
-            <button onClick={fetchBybit} style={{ marginLeft: "auto", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 10px", color: C.muted, fontSize: 10, cursor: "pointer" }}>↻ Обновить</button>
+            <button onClick={fetchBybit} style={{ marginLeft: "auto", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 10px", color: C.muted, fontSize: 12, cursor: "pointer" }}>↻</button>
           </>
         )}
       </div>
@@ -392,8 +401,8 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
       </div>
 
       <div style={{ display: "flex", gap: 4, padding: "12px 28px", borderBottom: `1px solid ${C.border}` }}>
-        {[{ id: "portfolio", label: "Портфель" }, { id: "homework", label: "Домашка" }, { id: "notes", label: "Заметки" }, { id: "radar", label: "Радар" }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ background: tab === t.id ? "rgba(0,229,255,0.08)" : "transparent", border: tab === t.id ? "1px solid rgba(0,229,255,0.25)" : `1px solid ${C.border}`, borderRadius: 8, color: tab === t.id ? "#00E5FF" : C.muted, fontSize: 13, padding: "7px 20px", cursor: "pointer" }}>
+        {[{ id: "portfolio", label: "Portfolio" }, { id: "homework", label: "Homework" }, { id: "notes", label: "Notes" }, { id: "radar", label: "Radar" }].map(t => (
+          <button key={t.id} onClick={() => navigate(`/defi/${t.id}`)} style={{ background: tab === t.id ? "rgba(0,229,255,0.08)" : "transparent", border: "none", borderBottom: tab === t.id ? "2px solid #00E5FF" : "2px solid transparent", color: tab === t.id ? "#00E5FF" : C.muted, fontSize: 13, padding: "8px 18px 10px", cursor: "pointer", borderRadius: 0, transition: "all 0.15s" }}>
             {t.label}
           </button>
         ))}
@@ -556,8 +565,7 @@ function WayDashboard({ data, setData }) {
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${C.border}` }}>
         <div>
-          <div style={{ fontSize: 11, color: "#FFD700", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 2 }}>🚀 ЦЕЛЬ</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>1M$ Way</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>1M$ Way</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>ТЕКУЩИЙ КАПИТАЛ</div>
@@ -640,7 +648,13 @@ function WayDashboard({ data, setData }) {
   );
 }
 
-const accentByPath = { "/": "#00E5FF", "/way": "#FFD700", "/wishlist": "#7C5CFC", "/defi": "#00E5FF" };
+function useAccent() {
+  const loc = useLocation();
+  if (loc.pathname.startsWith("/defi"))    return "#00E5FF";
+  if (loc.pathname.startsWith("/way"))     return "#FFD700";
+  if (loc.pathname.startsWith("/wishlist"))return "#7C5CFC";
+  return "#00E5FF";
+}
 
 function RadarDashboard({ embedded = false }) {
   const TAG_COLORS = { x: "#1DA1F2", media: "#7C5CFC", data: "#76FF03" };
@@ -853,9 +867,9 @@ function RadarDashboard({ embedded = false }) {
 }
 
 const navItems = [
+  { to: "/defi",    label: "Crypto",   color: "#00E5FF" },
   { to: "/way",     label: "1M$ Way",  color: "#FFD700" },
   { to: "/wishlist",label: "Wishlist", color: "#7C5CFC" },
-  { to: "/defi",    label: "Крипто",   color: "#00E5FF" },
 ];
 
 function Shell({ children, accent }) {
@@ -866,13 +880,17 @@ function Shell({ children, accent }) {
         <button onClick={() => navigate("/")} style={{ width: 30, height: 30, borderRadius: 8, background: "#0D1117", border: "1px solid rgba(0,229,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: "#00E5FF", cursor: "pointer", flexShrink: 0, fontFamily: "system-ui, sans-serif" }}>d</button>
         <div style={{ display: "flex", gap: 2, flex: 1 }}>
           {navItems.map(item => (
-            <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
-              display: "flex", alignItems: "center", padding: "6px 14px", borderRadius: 8,
-              background: isActive ? "rgba(0,229,255,0.08)" : "transparent",
-              color: isActive ? "#00E5FF" : "#9090B0",
-              fontSize: 13, fontWeight: isActive ? 600 : 400,
-              textDecoration: "none", transition: "all 0.15s", whiteSpace: "nowrap",
-            })}>
+            <NavLink key={item.to} to={item.to} end={item.to !== "/defi"} style={({ isActive }) => {
+              const loc = window.location.pathname;
+              const active = isActive || (item.to === "/defi" && loc.startsWith("/defi"));
+              return {
+                display: "flex", alignItems: "center", padding: "6px 14px", borderRadius: 8,
+                background: active ? "rgba(0,229,255,0.08)" : "transparent",
+                color: active ? "#00E5FF" : "#9090B0",
+                fontSize: 13, fontWeight: active ? 600 : 400,
+                textDecoration: "none", transition: "all 0.15s", whiteSpace: "nowrap",
+              };
+            }}>
               {item.label}
             </NavLink>
           ))}
@@ -889,12 +907,12 @@ function AppInner() {
   const [defiPositions, setDefiPositions] = useState(() => ls(STORAGE_KEYS.defi, null) || DEFI_INITIAL);
   useEffect(() => { lsSet(STORAGE_KEYS.defi, defiPositions); }, [defiPositions]);
   const [hwChecked, setHwChecked] = useState(() => ls(STORAGE_KEYS.hw, {}));
+  useEffect(() => { lsSet(STORAGE_KEYS.hw, hwChecked); }, [hwChecked]);
   const [wayData, setWayData] = useState(() => ls(STORAGE_KEYS.way, WAY_INITIAL));
   useEffect(() => { lsSet(STORAGE_KEYS.way, wayData); }, [wayData]);
 
   const navigate = useNavigate();
-  const path = window.location.pathname;
-  const accent = accentByPath[path] || "#6C63FF";
+  const accent = useAccent();
 
   return (
     <Shell accent={accent}>
@@ -902,7 +920,8 @@ function AppInner() {
         <Route path="/" element={<Overview wishState={wishState} defiPositions={defiPositions} defiHw={hwChecked} wayData={wayData} onNavigate={(id) => navigate(id === "home" ? "/" : `/${id === "wishes" ? "wishlist" : id}`)} />} />
         <Route path="/way" element={<WayDashboard data={wayData} setData={setWayData} />} />
         <Route path="/wishlist" element={<WishesDashboard wishState={wishState} setWishState={setWishState} />} />
-        <Route path="/defi" element={<DefiDashboard positions={defiPositions} setPositions={setDefiPositions} hwChecked={hwChecked} setHwChecked={setHwChecked} />} />
+        <Route path="/defi" element={<Navigate to="/defi/portfolio" replace />} />
+        <Route path="/defi/:tab" element={<DefiDashboard positions={defiPositions} setPositions={setDefiPositions} hwChecked={hwChecked} setHwChecked={setHwChecked} />} />
       </Routes>
     </Shell>
   );
