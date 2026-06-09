@@ -717,32 +717,34 @@ function RadarDashboard() {
           <div style={{ fontSize: 11, color: "#00E5FF", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 2 }}>📡 СТРАТЕГИЯ · НОВОСТИ</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>DeFi Радар</div>
         </div>
-        {brief?.generatedAt && <span style={{ fontSize: 10, color: C.muted }}>анализ от {new Date(brief.generatedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
       </div>
 
       <div style={{ padding: "20px 28px", maxWidth: 900, margin: "0 auto" }}>
 
         {/* ── AI БРИФ ── */}
-        <div style={{ background: "rgba(0,229,255,0.03)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 14, padding: 20, marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#00E5FF", letterSpacing: "0.1em" }}>// AI СТРАТЕГИЧЕСКИЙ БРИФ</span>
-            <button onClick={() => fetchBrief(true)} disabled={briefLoading}
-              style={{ background: briefLoading ? "transparent" : "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.25)", borderRadius: 6, color: briefLoading ? C.muted : "#00E5FF", fontSize: 10, padding: "4px 12px", cursor: briefLoading ? "wait" : "pointer" }}>
-              {briefLoading ? "анализирую..." : "↻ обновить анализ"}
-            </button>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: "0.04em" }}>AI Стратегический бриф</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {brief?.generatedAt && <span style={{ fontSize: 11, color: C.muted }}>{new Date(brief.generatedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
+              <button onClick={() => fetchBrief(true)} disabled={briefLoading}
+                style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, color: briefLoading ? C.muted : C.text, fontSize: 11, padding: "5px 14px", cursor: briefLoading ? "wait" : "pointer" }}>
+                {briefLoading ? "анализирую..." : "↻ обновить"}
+              </button>
+            </div>
           </div>
 
           {briefLoading && !brief && (
-            <div style={{ textAlign: "center", padding: "32px 0", color: C.muted, fontSize: 11 }}>
-              собираю данные APY + новости → отправляю Claude...
+            <div style={{ textAlign: "center", padding: "32px 0", color: C.muted, fontSize: 13 }}>
+              Собираю данные APY + новости...
             </div>
           )}
 
           {brief && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               {/* Summary */}
               {brief.summary && (
-                <div style={{ background: "rgba(0,229,255,0.06)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>
+                <div style={{ fontSize: 14, color: "rgba(255,255,255,0.8)", lineHeight: 1.7, paddingBottom: 20, borderBottom: `1px solid ${C.border}` }}>
                   {brief.summary}
                 </div>
               )}
@@ -750,13 +752,13 @@ function RadarDashboard() {
               {/* Urgent */}
               {brief.urgent?.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 9, color: "#FF1744", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>🔴 СРОЧНО</div>
+                  <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>⚠ Срочно</div>
                   {brief.urgent.map((item, i) => (
-                    <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, padding: "10px 12px", background: "rgba(255,23,68,0.05)", border: "1px solid rgba(255,23,68,0.15)", borderRadius: 8 }}>
-                      <div style={{ width: 3, background: IMPACT_C[item.impact] || "#FF1744", borderRadius: 2, flexShrink: 0 }} />
+                    <div key={i} style={{ display: "flex", gap: 12, marginBottom: 8, padding: "12px 16px", background: "rgba(255,100,80,0.06)", border: "1px solid rgba(255,100,80,0.2)", borderRadius: 8 }}>
+                      <div style={{ width: 3, background: "#FF6450", borderRadius: 2, flexShrink: 0 }} />
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 3 }}>{item.action}</div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>{item.action}</div>
+                        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{item.reason}</div>
                       </div>
                     </div>
                   ))}
@@ -766,13 +768,13 @@ function RadarDashboard() {
               {/* This week */}
               {brief.thisWeek?.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 9, color: "#FFD700", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>🟡 НА ЭТОЙ НЕДЕЛЕ</div>
+                  <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>На этой неделе</div>
                   {brief.thisWeek.map((item, i) => (
-                    <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, padding: "10px 12px", background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 8 }}>
-                      <div style={{ width: 3, background: IMPACT_C[item.impact] || "#FFD700", borderRadius: 2, flexShrink: 0 }} />
+                    <div key={i} style={{ display: "flex", gap: 12, marginBottom: 8, padding: "12px 16px", background: "rgba(255,255,255,0.03)", border: `1px solid ${C.border}`, borderRadius: 8 }}>
+                      <div style={{ width: 3, background: "#00E5FF", borderRadius: 2, flexShrink: 0 }} />
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 3 }}>{item.action}</div>
-                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 4 }}>{item.action}</div>
+                        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{item.reason}</div>
                       </div>
                     </div>
                   ))}
@@ -780,29 +782,29 @@ function RadarDashboard() {
               )}
 
               {/* Hold + Opportunities side by side */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 {brief.hold?.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 9, color: "#76FF03", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>🟢 ДЕРЖАТЬ</div>
+                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Держать</div>
                     {brief.hold.map((item, i) => (
-                      <div key={i} style={{ padding: "8px 12px", background: "rgba(118,255,3,0.04)", border: "1px solid rgba(118,255,3,0.12)", borderRadius: 8, marginBottom: 6 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "#76FF03", marginBottom: 2 }}>{item.position}</div>
-                        <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                      <div key={i} style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 4 }}>{item.position}</div>
+                        <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>{item.reason}</div>
                       </div>
                     ))}
                   </div>
                 )}
                 {brief.opportunities?.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 9, color: "#7C5CFC", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>💡 ВОЗМОЖНОСТИ</div>
+                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Возможности</div>
                     {brief.opportunities.map((item, i) => (
-                      <div key={i} style={{ padding: "8px 12px", background: "rgba(124,92,252,0.05)", border: "1px solid rgba(124,92,252,0.15)", borderRadius: 8, marginBottom: 6 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: "#7C5CFC" }}>{item.protocol}</span>
-                          {item.apy && <span style={{ fontSize: 10, color: "#76FF03", fontWeight: 700 }}>{item.apy}</span>}
-                          <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: RISK_C[item.risk] + "18", color: RISK_C[item.risk], border: `1px solid ${RISK_C[item.risk]}30` }}>{item.risk}</span>
+                      <div key={i} style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.protocol}</span>
+                          {item.apy && <span style={{ fontSize: 13, fontWeight: 700, color: "#00E5FF" }}>{item.apy}</span>}
+                          <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 10, background: "rgba(255,255,255,0.06)", color: C.muted, border: `1px solid ${C.border}` }}>{item.risk}</span>
                         </div>
-                        <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                        <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>{item.reason}</div>
                       </div>
                     ))}
                   </div>
