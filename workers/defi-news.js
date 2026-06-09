@@ -226,81 +226,97 @@ async function generateBrief(newsItems, apyData, env) {
     .map(n => `- ${n.source}: ${n.title}`)
     .join("\n");
 
-  const prompt = `Ты персональный DeFi советник. Твоя задача — дать конкретные, actionable рекомендации.
+  // ── Вся категоризация В КОДЕ — AI пишет только summary, reason-тексты, urgent ──
 
-МОЙ ПОРТФЕЛЬ — позиции с данными APY в DeFiLlama (сравнивай с рынком):
-${portfolioTrackableCtx}
+  const aaveBaseUsdc  = apyData.find(a => a.project === "aave-v3"              && a.chain === "Base"     && a.symbol === "USDC");
+  const slipstream    = apyData.find(a => a.project === "aerodrome-slipstream" && a.chain === "Base"     && a.symbol === "WETH-USDC");
+  const aeroV1        = apyData.find(a => a.project === "aerodrome-v1"         && a.chain === "Base"     && a.symbol === "WETH-USDC");
+  const lombardPool   = apyData.find(a => a.project === "lombard-lbtc");
 
-МОЙ ПОРТФЕЛЬ — позиции БЕЗ данных в DeFiLlama (это НОРМАЛЬНО, не флагировать как риск):
-${portfolioManualCtx}
+  // thisWeek: только LP→LP апгрейды с >2x разницей APY на той же платформе
+  const codeThisWeek = [];
+  if (slipstream && aeroV1 && slipstream.apy > aeroV1.apy * 2) {
+    codeThisWeek.push({
+      action: `Перевести $400 из Aerodrome v1 (USDC/WETH, ${aeroV1.apy}% APY) в Aerodrome Slipstream (WETH-USDC, ${slipstream.apy}% APY)`,
+      reason: `LP→LP апгрейд на той же платформе: ${(slipstream.apy / aeroV1.apy).toFixed(1)}x разница в APY. Важно: APY нестабилен (зависит от объёма торгов), есть риск impermanent loss при движении цены ETH±20%.`,
+      impact: "high",
+    });
+  }
 
-АКТУАЛЬНЫЕ APY НА РЫНКЕ ПРЯМО СЕЙЧАС (из DeFiLlama):
-${apyCtx}
+  // hold: зафиксировано в коде, AI только уточняет reason
+  const codeHold = [
+    { position: `Aave V3 Base (USDC, ${aaveBaseUsdc?.apy ?? 3.11}% APY)`,   reasonHint: "Lending, стабильный APY, нет impermanent loss. Держим как безрисковую базу стейблкоинов." },
+    { position: "Aave V3 Ethereum (PAXG, ~0% APY)",                          reasonHint: "PAXG как коллатерал — APY ~0% это норма, не риск." },
+    { position: `Lombard Ethereum (LBTC, ${lombardPool?.apy ?? 0.33}% base APY)`, reasonHint: "BTCfi: base APY низкий намеренно, реальный доход = Bitcoin staking rewards + Lombard points." },
+    { position: "Sonic/Berachain Multi (Various)",                            reasonHint: "Аирдроп/поинты стратегия — доход вне APY, оценивать отдельно." },
+  ];
 
-ПОСЛЕДНИЕ НОВОСТИ DeFi:
+  // opportunities: lending→LP с TVL≥$5M (смена риск-профиля)
+  const codeOpportunities = apyData
+    .filter(a =>
+      ["aerodrome-slipstream", "uniswap-v3"].includes(a.project) &&
+      a.apy >= 40 && a.apy < 150 &&
+      parseFloat(a.tvlUsd.replace(/[$M]/g, "")) >= 5
+    )
+    .slice(0, 3)
+    .map(a => ({
+      protocol: a.project, chain: a.chain, apy: `${a.apy}%`, tvl: a.tvlUsd,
+      reasonHint: `APY ${a.apy}% TVL ${a.tvlUsd}. Смена риск-профиля: lending (без IL) → LP (с IL и нестабильным APY).`,
+      risk: "high",
+    }));
+
+  // AI пишет ТОЛЬКО summary и ищет urgent в новостях — структура генерируется кодом
+  const prompt = `Ты DeFi-аналитик. Ответь ТОЛЬКО валидным JSON с двумя полями.
+
+НОВОСТИ (последние):
 ${newsCtx}
 
-ПРАВИЛА АНАЛИЗА (обязательно соблюдай):
+APY РЫНОК:
+${apyCtx}
 
-1. ТИПЫ ПОЗИЦИЙ — разный риск, нельзя сравнивать напрямую:
-   - Lending (Aave, Morpho) — нет impermanent loss, стабильный APY, низкий риск
-   - LP концентрированная (Aerodrome Slipstream, Uniswap V3) — есть impermanent loss, APY нестабилен (зависит от объёма торгов), требует мониторинга диапазона
-   - BTCfi (Lombard LBTC) — base APY низкий намеренно, реальный доход = staking rewards + points, НЕ сравнивать с lending APY
-   - Collateral (PAXG на Aave) — используется как залог, APY ~0% это норма, не риск
-   - Airdrop/Points (Sonic, Berachain) — доход не в APY, не флагировать
-
-2. URGENT — только если:
-   - Реальный риск: exploit, депег стейблкоина, резкое падение ликвидности
-   - Альтернатива ТОГО ЖЕ типа с APY в 3x+ выше (например Aerodrome v1 → Slipstream — одна платформа, одна пара, разные версии)
-   - НЕ является urgent: lending → LP переход (это смена риск-профиля, не улучшение)
-
-3. THIS WEEK — только если:
-   - Разница APY > 2x при ОДИНАКОВОМ типе позиции (lending vs lending, LP vs LP)
-   - Разница < 1% в абсолютных числах (например 3.11% → 3.86%) — НЕ рекомендовать, не стоит газа
-   - Aerodrome v1 (7.3%) → Aerodrome Slipstream (92.51%) — хорошая рекомендация, одна платформа
-
-4. Высокий APY в LP (>50%) — всегда упоминать что APY нестабилен и есть impermanent loss риск
-5. Используй только реальные цифры APY из данных выше, не придумывай
-
-Верни ТОЛЬКО валидный JSON без markdown:
+Верни ТОЛЬКО этот JSON без markdown:
 {
-  "summary": "1-2 предложения общей картины рынка прямо сейчас",
+  "summary": "2 предложения: (1) состояние рынка DeFi сейчас, (2) главный тренд или риск из новостей выше",
   "urgent": [
-    {"action": "конкретное действие", "reason": "почему важно сейчас", "impact": "high|medium|low"}
-  ],
-  "thisWeek": [
-    {"action": "что сделать на этой неделе", "reason": "обоснование с цифрами APY", "impact": "high|medium|low"}
-  ],
-  "hold": [
-    {"position": "название позиции", "reason": "почему держать"}
-  ],
-  "opportunities": [
-    {"protocol": "название", "chain": "сеть", "apy": "X%", "reason": "почему интересно", "risk": "low|medium|high"}
-  ],
-  "generatedAt": "${new Date().toISOString()}"
-}`;
+    {"action": "описание угрозы", "reason": "источник и детали", "impact": "high"}
+  ]
+}
+
+В urgent — ТОЛЬКО реальные угрозы безопасности из новостей: exploit протокола, депег стейблкоина, критическое регулирование.
+Если таких новостей нет — urgent должен быть пустым массивом [].
+НЕ добавляй в urgent советы по оптимизации APY.`;
+
+  // Финальный JSON собирается из кода + AI (только summary и urgent)
+  const codeBrief = {
+    thisWeek:     codeThisWeek,
+    hold:         codeHold.map(h => ({ position: h.position, reason: h.reasonHint })),
+    opportunities: codeOpportunities.map(o => ({ protocol: o.protocol, chain: o.chain, apy: o.apy, risk: o.risk, reason: o.reasonHint })),
+    generatedAt:  new Date().toISOString(),
+  };
 
   try {
     const aiRes = await fetch(`${GEMINI_URL}?key=${env.GEMINI_API_KEY}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: "Ты персональный DeFi советник. Отвечай ТОЛЬКО валидным JSON без markdown и без пояснений." }] },
+        system_instruction: { parts: [{ text: "Отвечай ТОЛЬКО валидным JSON без markdown." }] },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0.3, maxOutputTokens: 512 },
       }),
     });
     const data = await aiRes.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    return JSON.parse(text.replace(/```json|```/g, "").trim());
+    const aiPart = JSON.parse(text.replace(/```json|```/g, "").trim());
+    return {
+      summary:      aiPart.summary || "",
+      urgent:       Array.isArray(aiPart.urgent) ? aiPart.urgent : [],
+      ...codeBrief,
+    };
   } catch (e) {
     return {
-      summary:      "Не удалось получить анализ — попробуй обновить вручную",
+      summary:      "Данные актуальны, анализ текста временно недоступен.",
       urgent:       [],
-      thisWeek:     [],
-      hold:         [],
-      opportunities:[],
-      generatedAt:  new Date().toISOString(),
+      ...codeBrief,
       error:        e.message,
     };
   }
