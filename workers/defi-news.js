@@ -34,9 +34,17 @@ const USER_PORTFOLIO = [
 ];
 
 // Протоколы для мониторинга APY (конкуренты + наши)
-const WATCH_PROJECTS  = ["aave-v3", "morpho", "aerodrome-finance", "compound-v3",
-                         "fluid", "spark", "pendle", "rings", "lombard", "kamino"];
-const WATCH_SYMBOLS   = ["USDC", "WBTC", "PAXG", "ETH", "WETH", "LBTC", "USDe", "sUSDe"];
+const WATCH_PROJECTS  = [
+  "aave-v3", "morpho", "morpho-blue",
+  "aerodrome-v1", "aerodrome-slipstream",   // правильные названия
+  "compound-v3", "fluid", "fluid-dex", "fluid-lite",
+  "spark", "pendle", "rings", "lombard", "kamino",
+  "velodrome", "uniswap-v3",
+];
+const WATCH_SYMBOLS   = [
+  "USDC", "WBTC", "PAXG", "ETH", "WETH", "LBTC", "USDe", "sUSDe",
+  "WETH-USDC", "USDC-WETH", "USDC-ETH", "WBTC-USDC",  // LP пары
+];
 const WATCH_CHAINS    = ["Base", "Ethereum", "Sonic", "Arbitrum"];
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
@@ -101,23 +109,58 @@ async function fetchAPYs() {
     const res  = await fetchWithTimeout("https://yields.llama.fi/pools", 12000);
     if (!res.ok) return [];
     const data = await res.json();
+    const pools = data.data;
 
-    return data.data
+    // 1. Конкретные позиции портфеля — всегда включаем
+    const PORTFOLIO_POOLS = [
+      { project: "aave-v3",              chain: "Base",     symbol: "USDC"      },
+      { project: "aave-v3",              chain: "Base",     symbol: "WETH"      },
+      { project: "aave-v3",              chain: "Ethereum", symbol: "PAXG"      },
+      { project: "aerodrome-slipstream", chain: "Base",     symbol: "WETH-USDC" },
+      { project: "aerodrome-v1",         chain: "Base",     symbol: "WETH-USDC" },
+      { project: "morpho-blue",          chain: "Base",     symbol: null        }, // любой символ
+      { project: "morpho-blue",          chain: "Ethereum", symbol: null        },
+    ];
+
+    const portfolioPools = [];
+    for (const target of PORTFOLIO_POOLS) {
+      const matches = pools.filter(p =>
+        p.project === target.project &&
+        p.chain   === target.chain &&
+        (target.symbol === null || p.symbol?.toUpperCase().includes(target.symbol))
+      ).sort((a, b) => (b.tvlUsd || 0) - (a.tvlUsd || 0)).slice(0, 3);
+      portfolioPools.push(...matches);
+    }
+
+    // 2. Возможности — разумный TVL (>$500K) и APY до 200%
+    const opportunities = pools
       .filter(p =>
         WATCH_CHAINS.includes(p.chain) &&
+        WATCH_PROJECTS.includes(p.project) &&
         WATCH_SYMBOLS.some(s => p.symbol?.toUpperCase().includes(s)) &&
-        (WATCH_PROJECTS.some(w => (p.project || "").toLowerCase().includes(w.replace(/-/g,""))) ||
-         WATCH_PROJECTS.some(w => p.project === w))
+        (p.tvlUsd || 0) > 500_000 &&
+        (p.apy || 0) < 200 &&
+        (p.apy || 0) > 3
       )
       .sort((a, b) => (b.apy || 0) - (a.apy || 0))
-      .slice(0, 25)
-      .map(p => ({
-        project: p.project,
-        chain:   p.chain,
-        symbol:  p.symbol,
-        apy:     parseFloat((p.apy || 0).toFixed(2)),
-        tvlUsd:  p.tvlUsd ? `$${(p.tvlUsd / 1e6).toFixed(0)}M` : null,
-      }));
+      .slice(0, 15);
+
+    // Объединяем, убираем дубли
+    const seen = new Set();
+    const result = [...portfolioPools, ...opportunities].filter(p => {
+      const key = `${p.project}-${p.chain}-${p.symbol}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return result.slice(0, 30).map(p => ({
+      project: p.project,
+      chain:   p.chain,
+      symbol:  p.symbol,
+      apy:     parseFloat((p.apy || 0).toFixed(2)),
+      tvlUsd:  p.tvlUsd ? `$${(p.tvlUsd / 1e6).toFixed(1)}M` : "$0",
+    }));
   } catch { return []; }
 }
 
@@ -276,8 +319,11 @@ export default {
 
     // GET /apys
     if (url.pathname === "/apys") {
-      const cached = await env.NEWS_CACHE?.get("apys");
-      if (cached) return new Response(cached, { headers: { ...CORS, "X-Cache": "HIT" } });
+      const forceRefresh = url.searchParams.get("refresh") === "1";
+      if (!forceRefresh && env.NEWS_CACHE) {
+        const cached = await env.NEWS_CACHE.get("apys");
+        if (cached) return new Response(cached, { headers: { ...CORS, "X-Cache": "HIT" } });
+      }
       const data = await fetchAPYs();
       const payload = JSON.stringify({ data, updatedAt: new Date().toISOString() });
       await env.NEWS_CACHE?.put("apys", payload, { expirationTtl: 7200 });
