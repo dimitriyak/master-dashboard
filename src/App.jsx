@@ -666,16 +666,16 @@ const accentByPath = { "/": "#6C63FF", "/way": "#FFD700", "/wishlist": "#7C5CFC"
 
 function RadarDashboard() {
   const TAG_COLORS = { x: "#1DA1F2", media: "#7C5CFC", data: "#76FF03" };
-  const TAG_LABELS  = { x: "𝕏 Twitter", media: "Медиа", data: "Данные" };
-  const sentColor   = { bull: "#76FF03", bear: "#FF1744", neutral: "#00E5FF" };
+  const TAG_LABELS = { x: "𝕏 Twitter", media: "Медиа", data: "Данные" };
+  const IMPACT_C   = { high: "#FF1744", medium: "#FFD700", low: "#76FF03" };
+  const RISK_C     = { high: "#FF1744", medium: "#FFD700", low: "#76FF03" };
 
-  const [news,         setNews]         = useState([]);
-  const [newsLoading,  setNewsLoading]  = useState(false);
-  const [newsUpdated,  setNewsUpdated]  = useState(null);
-  const [newsFilter,   setNewsFilter]   = useState("all");
-  const [aiNews,       setAiNews]       = useState([]);
-  const [aiLoading,    setAiLoading]    = useState(false);
-  const [aiAsked,      setAiAsked]      = useState(false);
+  const [news,        setNews]        = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsUpdated, setNewsUpdated] = useState(null);
+  const [newsFilter,  setNewsFilter]  = useState("all");
+  const [brief,       setBrief]       = useState(null);
+  const [briefLoading,setBriefLoading]= useState(false);
 
   const fetchNews = async () => {
     setNewsLoading(true);
@@ -688,29 +688,17 @@ function RadarDashboard() {
     setNewsLoading(false);
   };
 
-  const fetchAI = async () => {
-    setAiLoading(true); setAiAsked(true);
+  const fetchBrief = async (refresh = false) => {
+    setBriefLoading(true);
     try {
-      const res  = await fetch(AI_PROXY_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [{ role: "user", content: "Топ-5 актуальных тем в DeFi: Aave, Aerodrome, Lombard BTCfi, Pendle, Berachain, Sonic. Кратко, JSON массив [{title,summary,tag,sentiment}]." }] }),
-      });
+      const res  = await fetch(`${NEWS_URL}/brief${refresh ? "?refresh=1" : ""}`);
       const data = await res.json();
-      setAiNews(JSON.parse((data.content?.[0]?.text || "[]").replace(/```json|```/g, "").trim()));
-    } catch {
-      setAiNews([
-        { title: "Aave v3 на Base растёт",      summary: "TVL превысил $500M, ставки по USDC 8-12%",       tag: "Lending", sentiment: "bull" },
-        { title: "Aerodrome доминирует на Base", summary: "Крупнейший DEX на Base по объёму",                tag: "DEX",     sentiment: "bull" },
-        { title: "BTCfi набирает обороты",       summary: "Lombard и Solv суммарно >$2B TVL",               tag: "BTCfi",   sentiment: "bull" },
-        { title: "Pendle — фиксированная yield", summary: "PT-USDC ~11% фиксированных",                     tag: "Yield",   sentiment: "neutral" },
-        { title: "Berachain PoL механика",       summary: "Proof of Liquidity привлекает протоколы",        tag: "L1",      sentiment: "bull" },
-      ]);
-    }
-    setAiLoading(false);
+      setBrief(data);
+    } catch {}
+    setBriefLoading(false);
   };
 
-  useEffect(() => { fetchNews(); }, []);
+  useEffect(() => { fetchNews(); fetchBrief(); }, []);
 
   const filtered  = newsFilter === "all" ? news : news.filter(i => i.tag === newsFilter);
   const timeSince = (d) => {
@@ -726,14 +714,105 @@ function RadarDashboard() {
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${C.border}` }}>
         <div>
-          <div style={{ fontSize: 11, color: "#00E5FF", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 2 }}>📡 НОВОСТИ</div>
+          <div style={{ fontSize: 11, color: "#00E5FF", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 2 }}>📡 СТРАТЕГИЯ · НОВОСТИ</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>DeFi Радар</div>
         </div>
-        {newsUpdated && <span style={{ fontSize: 10, color: C.muted }}>обновлено {new Date(newsUpdated).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>}
+        {brief?.generatedAt && <span style={{ fontSize: 10, color: C.muted }}>анализ от {new Date(brief.generatedAt).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>}
       </div>
 
       <div style={{ padding: "20px 28px", maxWidth: 900, margin: "0 auto" }}>
-        {/* Следим за */}
+
+        {/* ── AI БРИФ ── */}
+        <div style={{ background: "rgba(0,229,255,0.03)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 14, padding: 20, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#00E5FF", letterSpacing: "0.1em" }}>// AI СТРАТЕГИЧЕСКИЙ БРИФ</span>
+            <button onClick={() => fetchBrief(true)} disabled={briefLoading}
+              style={{ background: briefLoading ? "transparent" : "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.25)", borderRadius: 6, color: briefLoading ? C.muted : "#00E5FF", fontSize: 10, padding: "4px 12px", cursor: briefLoading ? "wait" : "pointer" }}>
+              {briefLoading ? "анализирую..." : "↻ обновить анализ"}
+            </button>
+          </div>
+
+          {briefLoading && !brief && (
+            <div style={{ textAlign: "center", padding: "32px 0", color: C.muted, fontSize: 11 }}>
+              собираю данные APY + новости → отправляю Claude...
+            </div>
+          )}
+
+          {brief && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Summary */}
+              {brief.summary && (
+                <div style={{ background: "rgba(0,229,255,0.06)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}>
+                  {brief.summary}
+                </div>
+              )}
+
+              {/* Urgent */}
+              {brief.urgent?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 9, color: "#FF1744", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>🔴 СРОЧНО</div>
+                  {brief.urgent.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, padding: "10px 12px", background: "rgba(255,23,68,0.05)", border: "1px solid rgba(255,23,68,0.15)", borderRadius: 8 }}>
+                      <div style={{ width: 3, background: IMPACT_C[item.impact] || "#FF1744", borderRadius: 2, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 3 }}>{item.action}</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* This week */}
+              {brief.thisWeek?.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 9, color: "#FFD700", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>🟡 НА ЭТОЙ НЕДЕЛЕ</div>
+                  {brief.thisWeek.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, marginBottom: 8, padding: "10px 12px", background: "rgba(255,215,0,0.04)", border: "1px solid rgba(255,215,0,0.12)", borderRadius: 8 }}>
+                      <div style={{ width: 3, background: IMPACT_C[item.impact] || "#FFD700", borderRadius: 2, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 3 }}>{item.action}</div>
+                        <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Hold + Opportunities side by side */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {brief.hold?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 9, color: "#76FF03", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>🟢 ДЕРЖАТЬ</div>
+                    {brief.hold.map((item, i) => (
+                      <div key={i} style={{ padding: "8px 12px", background: "rgba(118,255,3,0.04)", border: "1px solid rgba(118,255,3,0.12)", borderRadius: 8, marginBottom: 6 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#76FF03", marginBottom: 2 }}>{item.position}</div>
+                        <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {brief.opportunities?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 9, color: "#7C5CFC", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 8 }}>💡 ВОЗМОЖНОСТИ</div>
+                    {brief.opportunities.map((item, i) => (
+                      <div key={i} style={{ padding: "8px 12px", background: "rgba(124,92,252,0.05)", border: "1px solid rgba(124,92,252,0.15)", borderRadius: 8, marginBottom: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#7C5CFC" }}>{item.protocol}</span>
+                          {item.apy && <span style={{ fontSize: 10, color: "#76FF03", fontWeight: 700 }}>{item.apy}</span>}
+                          <span style={{ fontSize: 9, padding: "1px 6px", borderRadius: 10, background: RISK_C[item.risk] + "18", color: RISK_C[item.risk], border: `1px solid ${RISK_C[item.risk]}30` }}>{item.risk}</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.5 }}>{item.reason}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Следим за ── */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
           <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.15em", marginBottom: 12 }}>𝕏 СЛЕДИМ ЗА</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -750,8 +829,8 @@ function RadarDashboard() {
           </div>
         </div>
 
-        {/* Лента новостей */}
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
+        {/* ── Лента новостей ── */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
             <div style={{ display: "flex", gap: 6 }}>
               {["all", "x", "media", "data"].map(f => (
@@ -788,30 +867,6 @@ function RadarDashboard() {
               </a>
             ))}
           </div>
-        </div>
-
-        {/* AI анализ */}
-        <div style={{ background: "rgba(0,229,255,0.03)", border: "1px solid rgba(0,229,255,0.12)", borderRadius: 12, padding: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <span style={{ fontFamily: "monospace", fontSize: 11, color: "#00E5FF", letterSpacing: 2 }}>// AI АНАЛИЗ РЫНКА</span>
-            <button onClick={fetchAI} disabled={aiLoading}
-              style={{ background: aiLoading ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 6, color: "#00E5FF", fontSize: 10, padding: "5px 12px", cursor: aiLoading ? "wait" : "pointer" }}>
-              {aiLoading ? "АНАЛИЗИРУЮ..." : aiAsked ? "ОБНОВИТЬ" : "ЗАПРОСИТЬ"}
-            </button>
-          </div>
-          {!aiAsked && <div style={{ textAlign: "center", padding: "16px 0", color: "rgba(255,255,255,0.2)", fontSize: 11 }}>нажми ЗАПРОСИТЬ — получишь AI-сводку по рынку</div>}
-          {aiNews.map((item, i) => (
-            <div key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", padding: "10px 0", display: "flex", gap: 12 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: sentColor[item.sentiment], marginTop: 5, flexShrink: 0, boxShadow: `0 0 6px ${sentColor[item.sentiment]}` }} />
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <span style={{ color: "#fff", fontSize: 12, fontWeight: 500 }}>{item.title}</span>
-                  <span style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4, padding: "1px 6px", fontSize: 9, color: "#00E5FF" }}>{item.tag}</span>
-                </div>
-                <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, lineHeight: 1.5 }}>{item.summary}</div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>
