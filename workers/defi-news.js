@@ -50,6 +50,23 @@ const WATCH_SYMBOLS   = [
 const WATCH_CHAINS    = ["Base", "Ethereum", "Sonic", "Arbitrum"];
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+
+// Человекочитаемые имена протоколов
+const PROTOCOL_NAMES = {
+  "aave-v3":              "Aave V3",
+  "aerodrome-v1":         "Aerodrome V1",
+  "aerodrome-slipstream": "Aerodrome Slipstream",
+  "morpho-blue":          "Morpho Blue",
+  "uniswap-v3":           "Uniswap V3",
+  "lombard-lbtc":         "Lombard",
+  "compound-v3":          "Compound V3",
+  "fluid-dex":            "Fluid DEX",
+  "fluid-lending":        "Fluid Lending",
+  "spark":                "Spark",
+  "pendle":               "Pendle",
+  "velodrome":            "Velodrome",
+  "kamino":               "Kamino",
+};
 const CORS = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -203,6 +220,14 @@ async function buildFeed() {
 
 // ── AI Brief generation ──────────────────────────────────────────────────────
 
+function buildFallbackSummary(apyData) {
+  const top = apyData.filter(a => a.apy > 20).sort((a,b) => b.apy - a.apy).slice(0,2);
+  const stable = apyData.filter(a => ["aave-v3","morpho-blue"].includes(a.project) && a.apy > 0).sort((a,b) => b.apy - a.apy)[0];
+  const topStr = top.map(a => `${PROTOCOL_NAMES[a.project]||a.project} ${a.apy}%`).join(", ");
+  const stableStr = stable ? `${PROTOCOL_NAMES[stable.project]||stable.project} ${stable.chain} предлагает ${stable.apy}% для ${stable.symbol}` : "";
+  return `Рынок DeFi: высокодоходные LP-пулы показывают ${topStr}. ${stableStr ? `Stable lending: ${stableStr}.` : ""}`.trim();
+}
+
 async function generateBrief(newsItems, apyData, env) {
   // Разбиваем портфель на trackable и manual
   const trackablePositions = USER_PORTFOLIO.filter(p => p.trackable);
@@ -260,31 +285,23 @@ async function generateBrief(newsItems, apyData, env) {
     )
     .slice(0, 3)
     .map(a => ({
-      protocol: a.project, chain: a.chain, apy: `${a.apy}%`, tvl: a.tvlUsd,
+      protocol: PROTOCOL_NAMES[a.project] || a.project,
+      chain: a.chain, apy: `${a.apy}%`, tvl: a.tvlUsd,
       reasonHint: `APY ${a.apy}% TVL ${a.tvlUsd}. Смена риск-профиля: lending (без IL) → LP (с IL и нестабильным APY).`,
       risk: "high",
     }));
 
   // AI пишет ТОЛЬКО summary и ищет urgent в новостях — структура генерируется кодом
-  const prompt = `Ты DeFi-аналитик. Ответь ТОЛЬКО валидным JSON с двумя полями.
+  const topNews = newsCtx || "нет новостей";
+  const prompt = `Задача: проанализируй DeFi-новости и рынок, верни JSON с двумя полями.
 
-НОВОСТИ (последние):
-${newsCtx}
+Новости: ${topNews}
+Рынок APY: ${apyCtx}
 
-APY РЫНОК:
-${apyCtx}
+Ответь строго в этом формате (без markdown, без пояснений):
+{"summary":"ТЕКСТ — 2 предложения: общее состояние DeFi рынка + главный тренд из новостей","urgent":[]}
 
-Верни ТОЛЬКО этот JSON без markdown:
-{
-  "summary": "2 предложения: (1) состояние рынка DeFi сейчас, (2) главный тренд или риск из новостей выше",
-  "urgent": [
-    {"action": "описание угрозы", "reason": "источник и детали", "impact": "high"}
-  ]
-}
-
-В urgent — ТОЛЬКО реальные угрозы безопасности из новостей: exploit протокола, депег стейблкоина, критическое регулирование.
-Если таких новостей нет — urgent должен быть пустым массивом [].
-НЕ добавляй в urgent советы по оптимизации APY.`;
+Правило для urgent: добавляй объект {"action":"...","reason":"...","impact":"high"} ТОЛЬКО если в новостях есть exploit, депег стейблкоина или критическое регулирование. В остальных случаях urgent остаётся пустым массивом.`;
 
   // Финальный JSON собирается из кода + AI (только summary и urgent)
   const codeBrief = {
@@ -307,17 +324,20 @@ ${apyCtx}
     const data = await aiRes.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     const aiPart = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const summary = (aiPart.summary && !aiPart.summary.includes("ТЕКСТ"))
+      ? aiPart.summary
+      : buildFallbackSummary(apyData);
     return {
-      summary:      aiPart.summary || "",
-      urgent:       Array.isArray(aiPart.urgent) ? aiPart.urgent : [],
+      summary,
+      urgent: Array.isArray(aiPart.urgent) ? aiPart.urgent : [],
       ...codeBrief,
     };
   } catch (e) {
     return {
-      summary:      "Данные актуальны, анализ текста временно недоступен.",
-      urgent:       [],
+      summary:  buildFallbackSummary(apyData),
+      urgent:   [],
       ...codeBrief,
-      error:        e.message,
+      error:    e.message,
     };
   }
 }
