@@ -2,8 +2,37 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom'
 import {
   STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL,
-  DEFI_WEEKS, BYBIT_STEPS, TYPE_ICONS, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, X_ACCOUNTS, pill
+  DEFI_WEEKS, BYBIT_STEPS, TYPE_ICONS, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, X_ACCOUNTS, pill,
+  SYNC_URL, SYNC_TOKEN,
 } from './constants'
+
+// ── Cloud sync ────────────────────────────────────────────────────────────────
+const syncHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${SYNC_TOKEN}` };
+
+async function cloudGet(key) {
+  try {
+    const res = await fetch(`${SYNC_URL}/sync/${key}`, { headers: syncHeaders });
+    if (!res.ok) return null;
+    const { value } = await res.json();
+    return value;
+  } catch { return null; }
+}
+
+async function cloudSet(key, value) {
+  try {
+    await fetch(`${SYNC_URL}/sync/${key}`, {
+      method: "POST",
+      headers: syncHeaders,
+      body: JSON.stringify(value),
+    });
+  } catch {}
+}
+
+// Debounce helper
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
 
 function ls(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
@@ -872,7 +901,7 @@ const navItems = [
   { to: "/wishlist",label: "Wishlist", color: "#7C5CFC" },
 ];
 
-function Shell({ children, accent }) {
+function Shell({ children, accent, syncStatus }) {
   const navigate = useNavigate();
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Mono', 'Courier New', monospace", overflowX: "hidden" }}>
@@ -895,27 +924,57 @@ function Shell({ children, accent }) {
             </NavLink>
           ))}
         </div>
-        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#00E5FF", opacity: 0.6, flexShrink: 0 }} />
+        <div title={syncStatus === "synced" ? "Данные синхронизированы" : syncStatus === "loading" ? "Синхронизация..." : syncStatus === "error" ? "Ошибка синхронизации" : ""}
+          style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, transition: "background 0.3s",
+            background: syncStatus === "synced" ? "#00E5FF" : syncStatus === "loading" ? "#FFD700" : syncStatus === "error" ? "#FF6450" : C.border,
+          }} />
       </div>
       <div className="fade-in">{children}</div>
     </div>
   );
 }
 
+// Debounced cloud savers (created once outside component)
+const saveWishes   = debounce((v) => cloudSet(STORAGE_KEYS.wishes, v), 2000);
+const saveDefi     = debounce((v) => cloudSet(STORAGE_KEYS.defi, v),   2000);
+const saveHw       = debounce((v) => cloudSet(STORAGE_KEYS.hw, v),     2000);
+const saveWay      = debounce((v) => cloudSet(STORAGE_KEYS.way, v),    2000);
+
 function AppInner() {
-  const [wishState, setWishState] = useState(() => ls(STORAGE_KEYS.wishes, {}));
-  const [defiPositions, setDefiPositions] = useState(() => ls(STORAGE_KEYS.defi, null) || DEFI_INITIAL);
-  useEffect(() => { lsSet(STORAGE_KEYS.defi, defiPositions); }, [defiPositions]);
-  const [hwChecked, setHwChecked] = useState(() => ls(STORAGE_KEYS.hw, {}));
-  useEffect(() => { lsSet(STORAGE_KEYS.hw, hwChecked); }, [hwChecked]);
-  const [wayData, setWayData] = useState(() => ls(STORAGE_KEYS.way, WAY_INITIAL));
-  useEffect(() => { lsSet(STORAGE_KEYS.way, wayData); }, [wayData]);
+  const [wishState,     setWishStateRaw]     = useState(() => ls(STORAGE_KEYS.wishes, {}));
+  const [defiPositions, setDefiPositionsRaw] = useState(() => ls(STORAGE_KEYS.defi, null) || DEFI_INITIAL);
+  const [hwChecked,     setHwCheckedRaw]     = useState(() => ls(STORAGE_KEYS.hw, {}));
+  const [wayData,       setWayDataRaw]       = useState(() => ls(STORAGE_KEYS.way, WAY_INITIAL));
+  const [syncStatus,    setSyncStatus]       = useState("idle"); // idle | loading | synced | error
+
+  // Wrapped setters: save to localStorage + debounce cloud sync
+  const setWishState     = (v) => { const next = typeof v === "function" ? v(wishState)     : v; lsSet(STORAGE_KEYS.wishes, next); setWishStateRaw(next);     saveWishes(next); };
+  const setDefiPositions = (v) => { const next = typeof v === "function" ? v(defiPositions) : v; lsSet(STORAGE_KEYS.defi,    next); setDefiPositionsRaw(next); saveDefi(next); };
+  const setHwChecked     = (v) => { const next = typeof v === "function" ? v(hwChecked)     : v; lsSet(STORAGE_KEYS.hw,      next); setHwCheckedRaw(next);     saveHw(next); };
+  const setWayData       = (v) => { const next = typeof v === "function" ? v(wayData)       : v; lsSet(STORAGE_KEYS.way,     next); setWayDataRaw(next);       saveWay(next); };
+
+  // On mount: load from cloud and merge (cloud wins if newer)
+  useEffect(() => {
+    setSyncStatus("loading");
+    Promise.all([
+      cloudGet(STORAGE_KEYS.wishes),
+      cloudGet(STORAGE_KEYS.defi),
+      cloudGet(STORAGE_KEYS.hw),
+      cloudGet(STORAGE_KEYS.way),
+    ]).then(([wishes, defi, hw, way]) => {
+      if (wishes) { lsSet(STORAGE_KEYS.wishes, wishes); setWishStateRaw(wishes); }
+      if (defi)   { lsSet(STORAGE_KEYS.defi,   defi);   setDefiPositionsRaw(defi); }
+      if (hw)     { lsSet(STORAGE_KEYS.hw,      hw);     setHwCheckedRaw(hw); }
+      if (way)    { lsSet(STORAGE_KEYS.way,     way);    setWayDataRaw(way); }
+      setSyncStatus("synced");
+    }).catch(() => setSyncStatus("error"));
+  }, []);
 
   const navigate = useNavigate();
   const accent = useAccent();
 
   return (
-    <Shell accent={accent}>
+    <Shell accent={accent} syncStatus={syncStatus}>
       <Routes>
         <Route path="/" element={<Overview wishState={wishState} defiPositions={defiPositions} defiHw={hwChecked} wayData={wayData} onNavigate={(id) => navigate(id === "home" ? "/" : `/${id === "wishes" ? "wishlist" : id}`)} />} />
         <Route path="/way" element={<WayDashboard data={wayData} setData={setWayData} />} />

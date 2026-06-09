@@ -5,6 +5,9 @@ export const STORAGE_KEYS = {
   way: "way-to-1m-v1",
 };
 
+export const SYNC_URL   = "https://data-sync.dimitriyak.workers.dev";
+export const SYNC_TOKEN = "dboard2026";
+
 export const WISH_CATEGORIES = [
   { id: "health", icon: "🏥", title: "Здоровье", color: "#fc5c7d", items: ["Жировик удалить","Зуб имплант","Режим сна — спать по 8 часов","Бросить курить","Укреплять мышцы для падела","Красивое тело без пивного живота"] },
   { id: "sklld", icon: "🏢", title: "Skllad", color: "#7c5cfc", items: ["Маркетолог","Выход из операционки склад","Мотивация директор","Sklld 3 млн+ прибыли, +10% ежемесячно"] },

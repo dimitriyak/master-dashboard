@@ -1,0 +1,11 @@
+{
+  "name": "data-sync",
+  "main": "data-sync.js",
+  "compatibility_date": "2024-01-01",
+  "kv_namespaces": [
+    {
+      "binding": "USER_DATA",
+      "id": "71b9592560f64cc3ae35b7d4103a4e49"
+    }
+  ]
+}
