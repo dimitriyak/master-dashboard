@@ -53,9 +53,9 @@ function Overview({ wishState, defiPositions, defiHw, wayData, onNavigate }) {
   const wayNextTask = wayData.tasks.find(t => !t.done);
 
   const cards = [
+    { id: "defi", icon: "₿", label: "CRYPTO", title: "Crypto", subtitle: "Portfolio · Homework · Radar", progress: defiHwPct, stat1: { label: "P&L", val: `${defiPnl >= 0 ? "+" : ""}$${defiPnl.toFixed(0)}` }, stat2: { label: "в работе", val: `$${defiCurrent.toLocaleString()}` }, nextTask: defiNextTask || null, color: "#00E5FF" },
     { id: "way", icon: "🚀", label: "ЦЕЛЬ", title: "1M$ Way", subtitle: "Путь к первому миллиону", progress: wayProgress, stat1: { label: "задач", val: `${wayDone}/${wayData.tasks.length}` }, stat2: { label: "сейчас", val: `$${wayData.currentAmount.toLocaleString()}` }, nextTask: wayNextTask?.text || null, color: "#FFD700" },
-    { id: "wishes", icon: "✦", label: "ЛИЧНОЕ", title: "Мои хотелки", subtitle: "Цели · Мечты · Планы", progress: wishPct, stat1: { label: "выполнено", val: `${wishDone}/${wishTotal}` }, stat2: { label: "категорий", val: `${WISH_CATEGORIES.length}` }, nextTask: wishNextTask || null, color: "#7C5CFC" },
-    { id: "defi", icon: "₿", label: "КРИПТА · DEFI", title: "DeFi Портфель", subtitle: "Командный центр", progress: defiHwPct, stat1: { label: "P&L", val: `${defiPnl >= 0 ? "+" : ""}$${defiPnl.toFixed(0)}` }, stat2: { label: "в работе", val: `$${defiCurrent.toLocaleString()}` }, nextTask: defiNextTask || null, color: "#00E5FF" },
+    { id: "wishes", icon: "✦", label: "ЛИЧНОЕ", title: "Wishlist", subtitle: "Цели · Мечты · Планы", progress: wishPct, stat1: { label: "выполнено", val: `${wishDone}/${wishTotal}` }, stat2: { label: "категорий", val: `${WISH_CATEGORIES.length}` }, nextTask: wishNextTask || null, color: "#7C5CFC" },
   ];
 
   return (
