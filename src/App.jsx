@@ -345,8 +345,8 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
     <div style={{ paddingBottom: 40 }}>
       <div style={{ padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${C.border}` }}>
         <div>
-          <div style={{ fontSize: 11, color: "#00E5FF", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 2 }}>// DEFI КОМАНДНЫЙ ЦЕНТР</div>
-          <div style={{ fontSize: 12, color: C.muted }}>Мой DeFi Портфель</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Крипто</div>
+          <div style={{ fontSize: 12, color: C.muted }}>Портфель · Учёба · Радар</div>
         </div>
         <div style={{ fontFamily: "monospace", fontSize: 13, color: "#00E5FF" }}>{time.toLocaleTimeString("ru-RU")}</div>
       </div>
@@ -392,8 +392,8 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
       </div>
 
       <div style={{ display: "flex", gap: 4, padding: "12px 28px", borderBottom: `1px solid ${C.border}` }}>
-        {[{ id: "portfolio", label: "ПОРТФЕЛЬ" }, { id: "homework", label: "ДОМАШКА" }, { id: "notes", label: "ЗАМЕТКИ" }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, maxWidth: 140, background: tab === t.id ? "rgba(0,229,255,0.08)" : "transparent", border: tab === t.id ? "1px solid rgba(0,229,255,0.2)" : `1px solid ${C.border}`, borderRadius: 8, color: tab === t.id ? "#00E5FF" : C.muted, fontSize: 10, padding: "8px 0", cursor: "pointer", letterSpacing: "0.1em" }}>
+        {[{ id: "portfolio", label: "Портфель" }, { id: "homework", label: "Домашка" }, { id: "notes", label: "Заметки" }, { id: "radar", label: "Радар" }].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ background: tab === t.id ? "rgba(0,229,255,0.08)" : "transparent", border: tab === t.id ? "1px solid rgba(0,229,255,0.25)" : `1px solid ${C.border}`, borderRadius: 8, color: tab === t.id ? "#00E5FF" : C.muted, fontSize: 13, padding: "7px 20px", cursor: "pointer" }}>
             {t.label}
           </button>
         ))}
@@ -521,29 +521,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
           );
         })()}
 
-        {tab === "radar" && (
-          <div style={{ background: "rgba(0,229,255,0.03)", border: "1px solid rgba(0,229,255,0.12)", borderRadius: 12, padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <span style={{ fontFamily: "monospace", fontSize: 11, color: "#00E5FF", letterSpacing: 2 }}>// AI РАДАР</span>
-              <button onClick={fetchAI} disabled={aiLoading} style={{ background: aiLoading ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 6, color: "#00E5FF", fontFamily: "monospace", fontSize: 10, padding: "5px 12px", cursor: aiLoading ? "wait" : "pointer" }}>
-                {aiLoading ? "СКАНИРУЮ..." : aiAsked ? "ОБНОВИТЬ" : "СКАНИРОВАТЬ"}
-              </button>
-            </div>
-            {!aiAsked && <div style={{ textAlign: "center", padding: "24px 0", color: "rgba(255,255,255,0.2)", fontFamily: "monospace", fontSize: 11 }}>нажми СКАНИРОВАТЬ для AI-анализа рынка</div>}
-            {aiNews.map((item, i) => (
-              <div key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", padding: "12px 0", display: "flex", gap: 12 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: sentColor[item.sentiment], marginTop: 5, flexShrink: 0, boxShadow: `0 0 6px ${sentColor[item.sentiment]}` }} />
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ color: "#fff", fontSize: 13, fontWeight: 500 }}>{item.title}</span>
-                    <span style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4, padding: "1px 6px", fontSize: 9, color: "#00E5FF", fontFamily: "monospace" }}>{item.tag}</span>
-                  </div>
-                  <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, lineHeight: 1.5 }}>{item.summary}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {tab === "radar" && <RadarDashboard embedded />}
       </div>
     </div>
   );
@@ -662,9 +640,9 @@ function WayDashboard({ data, setData }) {
   );
 }
 
-const accentByPath = { "/": "#6C63FF", "/way": "#FFD700", "/wishlist": "#7C5CFC", "/defi": "#00E5FF" };
+const accentByPath = { "/": "#00E5FF", "/way": "#FFD700", "/wishlist": "#7C5CFC", "/defi": "#00E5FF" };
 
-function RadarDashboard() {
+function RadarDashboard({ embedded = false }) {
   const TAG_COLORS = { x: "#1DA1F2", media: "#7C5CFC", data: "#76FF03" };
   const TAG_LABELS = { x: "𝕏 Twitter", media: "Медиа", data: "Данные" };
   const IMPACT_C   = { high: "#FF1744", medium: "#FFD700", low: "#76FF03" };
@@ -711,15 +689,14 @@ function RadarDashboard() {
   };
 
   return (
-    <div style={{ paddingBottom: 40 }}>
-      <div style={{ padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${C.border}` }}>
-        <div>
-          <div style={{ fontSize: 11, color: "#00E5FF", letterSpacing: "0.15em", fontWeight: 700, marginBottom: 2 }}>📡 СТРАТЕГИЯ · НОВОСТИ</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: "-0.02em" }}>DeFi Радар</div>
+    <div style={{ paddingBottom: embedded ? 0 : 40 }}>
+      {!embedded && (
+        <div style={{ padding: "16px 28px", display: "flex", alignItems: "center", borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Радар</div>
         </div>
-      </div>
+      )}
 
-      <div style={{ padding: "20px 28px", maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ padding: embedded ? "0" : "20px 28px", maxWidth: 900, margin: "0 auto" }}>
 
         {/* ── AI БРИФ ── */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, marginBottom: 20 }}>
@@ -878,31 +855,29 @@ function RadarDashboard() {
 const navItems = [
   { to: "/way",     label: "1M$ Way",  color: "#FFD700" },
   { to: "/wishlist",label: "Wishlist", color: "#7C5CFC" },
-  { to: "/defi",    label: "DeFi",     color: "#00E5FF" },
-  { to: "/radar",   label: "Радар",    color: "#1DA1F2" },
+  { to: "/defi",    label: "Крипто",   color: "#00E5FF" },
 ];
 
 function Shell({ children, accent }) {
   const navigate = useNavigate();
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "'DM Mono', 'Courier New', monospace", overflowX: "hidden" }}>
-      <div style={{ position: "sticky", top: 0, zIndex: 100, background: C.surface, borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 16px", height: 48, gap: 8 }}>
-        <button onClick={() => navigate("/")} style={{ width: 28, height: 28, borderRadius: 7, background: "linear-gradient(135deg, #7C5CFC, #00E5FF)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900, color: "#fff", cursor: "pointer", flexShrink: 0 }}>D</button>
+      <div style={{ position: "sticky", top: 0, zIndex: 100, background: C.surface, borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", padding: "0 20px", height: 52, gap: 10 }}>
+        <button onClick={() => navigate("/")} style={{ width: 30, height: 30, borderRadius: 8, background: "#0D1117", border: "1px solid rgba(0,229,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: "#00E5FF", cursor: "pointer", flexShrink: 0, fontFamily: "system-ui, sans-serif" }}>d</button>
         <div style={{ display: "flex", gap: 2, flex: 1 }}>
           {navItems.map(item => (
             <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
-              display: "flex", alignItems: "center", padding: "5px 12px", borderRadius: 7,
-              background: isActive ? item.color + "18" : "transparent",
-              color: isActive ? item.color : "#9090B0",
-              fontSize: 11, fontWeight: isActive ? 700 : 500,
-              textDecoration: "none", transition: "all 0.2s", whiteSpace: "nowrap",
-              letterSpacing: "0.04em", textShadow: isActive ? `0 0 12px ${item.color}88` : "none",
+              display: "flex", alignItems: "center", padding: "6px 14px", borderRadius: 8,
+              background: isActive ? "rgba(0,229,255,0.08)" : "transparent",
+              color: isActive ? "#00E5FF" : "#9090B0",
+              fontSize: 13, fontWeight: isActive ? 600 : 400,
+              textDecoration: "none", transition: "all 0.15s", whiteSpace: "nowrap",
             })}>
               {item.label}
             </NavLink>
           ))}
         </div>
-        <div style={{ width: 5, height: 5, borderRadius: "50%", background: accent, boxShadow: `0 0 8px ${accent}`, flexShrink: 0 }} />
+        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#00E5FF", opacity: 0.6, flexShrink: 0 }} />
       </div>
       <div className="fade-in">{children}</div>
     </div>
@@ -928,7 +903,6 @@ function AppInner() {
         <Route path="/way" element={<WayDashboard data={wayData} setData={setWayData} />} />
         <Route path="/wishlist" element={<WishesDashboard wishState={wishState} setWishState={setWishState} />} />
         <Route path="/defi" element={<DefiDashboard positions={defiPositions} setPositions={setDefiPositions} hwChecked={hwChecked} setHwChecked={setHwChecked} />} />
-        <Route path="/radar" element={<RadarDashboard />} />
       </Routes>
     </Shell>
   );
