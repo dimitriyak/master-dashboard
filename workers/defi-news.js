@@ -39,7 +39,7 @@ const WATCH_PROJECTS  = ["aave-v3", "morpho", "aerodrome-finance", "compound-v3"
 const WATCH_SYMBOLS   = ["USDC", "WBTC", "PAXG", "ETH", "WETH", "LBTC", "USDe", "sUSDe"];
 const WATCH_CHAINS    = ["Base", "Ethereum", "Sonic", "Arbitrum"];
 
-const AI_PROXY        = "https://ai-proxy.dimitriyak.workers.dev";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 const CORS = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
@@ -157,7 +157,7 @@ async function buildFeed() {
 
 // ── AI Brief generation ──────────────────────────────────────────────────────
 
-async function generateBrief(newsItems, apyData) {
+async function generateBrief(newsItems, apyData, env) {
   const portfolioCtx = USER_PORTFOLIO
     .map(p => `- ${p.protocol} на ${p.chain}: $${p.allocated} в ${p.asset}`)
     .join("\n");
@@ -208,15 +208,17 @@ ${newsCtx}
 }`;
 
   try {
-    const res  = await fetchWithTimeout(AI_PROXY, 30000);
-    // AI proxy requires POST
-    const aiRes = await fetch(AI_PROXY, {
+    const aiRes = await fetch(`${GEMINI_URL}?key=${env.GEMINI_API_KEY}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: "Ты персональный DeFi советник. Отвечай ТОЛЬКО валидным JSON без markdown и без пояснений." }] },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+      }),
     });
     const data = await aiRes.json();
-    const text = data.content?.[0]?.text || "{}";
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch (e) {
     return {
@@ -247,7 +249,7 @@ async function runDailyJob(env) {
   }
 
   // Generate and cache AI brief
-  const brief = await generateBrief(feed.items, apyData);
+  const brief = await generateBrief(feed.items, apyData, env);
   if (env.NEWS_CACHE) {
     await env.NEWS_CACHE.put("brief", JSON.stringify(brief), { expirationTtl: 86400 }); // 24h
   }
@@ -296,7 +298,7 @@ export default {
       ]);
       const newsItems = feedRaw  ? JSON.parse(feedRaw).items  : (await buildFeed()).items;
       const apyData   = apyRaw   ? JSON.parse(apyRaw).data    : await fetchAPYs();
-      const brief     = await generateBrief(newsItems, apyData);
+      const brief     = await generateBrief(newsItems, apyData, env);
       await env.NEWS_CACHE?.put("brief", JSON.stringify(brief), { expirationTtl: 86400 });
       return new Response(JSON.stringify(brief), { headers: { ...CORS, "X-Cache": "MISS" } });
     }

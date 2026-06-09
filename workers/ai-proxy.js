@@ -1,42 +1,67 @@
 /**
  * Cloudflare Worker: AI Proxy
- * Проксирует запросы к Anthropic API, скрывая API ключ от браузера.
+ * Gemini (основной) + Grok (фолбэк)
  *
- * Деплой:
- *   wrangler deploy workers/ai-proxy.js --name ai-proxy
- *   wrangler secret put ANTHROPIC_API_KEY --name ai-proxy
+ * Secrets: GEMINI_API_KEY, GROK_API_KEY
  */
+
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+const GROK_URL   = "https://api.x.ai/v1/chat/completions";
+
+async function callGemini(env, systemPrompt, userMessage) {
+  const res = await fetch(`${GEMINI_URL}?key=${env.GEMINI_API_KEY}`, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 2048 },
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || "Gemini error");
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  return text;
+}
+
+async function callGrok(env, systemPrompt, userMessage) {
+  const res = await fetch(GROK_URL, {
+    method:  "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${env.GROK_API_KEY}` },
+    body: JSON.stringify({
+      model: "grok-3-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user",   content: userMessage },
+      ],
+      temperature: 0.3,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || "Grok error");
+  return data.choices?.[0]?.message?.content || "";
+}
 
 export default {
   async fetch(request, env) {
-    if (request.method === "OPTIONS") {
-      return corsResponse(null, 204);
-    }
-
-    if (request.method !== "POST") {
-      return corsResponse(JSON.stringify({ error: "Method not allowed" }), 405);
-    }
+    if (request.method === "OPTIONS") return corsResponse(null, 204);
+    if (request.method !== "POST")    return corsResponse(JSON.stringify({ error: "POST only" }), 405);
 
     try {
-      const body = await request.json();
+      const body         = await request.json();
+      const systemPrompt = body.system   || "Ты DeFi-аналитик. Отвечай только валидным JSON без markdown.";
+      const userMessage  = body.messages?.findLast(m => m.role === "user")?.content || "";
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": env.ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-5",
-          max_tokens: 1000,
-          system: "Ты DeFi-аналитик. Отвечай ТОЛЬКО валидным JSON массивом без markdown. Формат: [{\"title\":\"...\",\"summary\":\"...\",\"tag\":\"...\",\"sentiment\":\"bull|bear|neutral\"}]. Строго 5 объектов.",
-          messages: body.messages,
-        }),
-      });
+      let text = "";
+      try {
+        text = await callGemini(env, systemPrompt, userMessage);
+      } catch (geminiErr) {
+        // Фолбэк на Grok
+        text = await callGrok(env, systemPrompt, userMessage);
+      }
 
-      const data = await res.json();
-      return corsResponse(JSON.stringify(data), res.status);
+      return corsResponse(JSON.stringify({ content: [{ text }] }), 200);
+
     } catch (e) {
       return corsResponse(JSON.stringify({ error: e.message }), 500);
     }
