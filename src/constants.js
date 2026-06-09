@@ -169,6 +169,17 @@ export const C = {
 
 export const BYBIT_PROXY_URL = "https://bybit-proxy.dimitriyak.workers.dev";
 export const AI_PROXY_URL = import.meta.env.VITE_AI_PROXY_URL || "https://ai-proxy.dimitriyak.workers.dev";
+export const NEWS_URL = "https://defi-news.dimitriyak.workers.dev";
+
+export const X_ACCOUNTS = [
+  { handle: "DefiIgnas",         name: "Ignas DeFi",        focus: "Разборы протоколов, yield стратегии" },
+  { handle: "0xngmi",            name: "0xngmi",            focus: "Данные DeFiLlama, аналитика" },
+  { handle: "CryptoHayes",       name: "Arthur Hayes",      focus: "Макро, BTC, крупные тренды" },
+  { handle: "sassal0x",          name: "sassal",            focus: "DeFi аналитика, Ethereum" },
+  { handle: "Route2FI",          name: "Route 2 FI",        focus: "Yield farming, практика" },
+  { handle: "DeFi_Made_Here",    name: "DeFi Made Here",    focus: "Обучение, механики" },
+  { handle: "SmallCapScientist", name: "SmallCapScientist", focus: "Альфа, возможности" },
+];
 
 export const pill = (color, text, small) => ({
   display: "inline-flex", alignItems: "center",

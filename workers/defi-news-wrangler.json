@@ -1,0 +1,14 @@
+{
+  "name": "defi-news",
+  "main": "defi-news.js",
+  "compatibility_date": "2024-01-01",
+  "kv_namespaces": [
+    {
+      "binding": "NEWS_CACHE",
+      "id": "881bd80e33e6442fb8d4124be80da330"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 */2 * * *"]
+  }
+}

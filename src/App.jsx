@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate } from 'react-router-dom'
 import {
   STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL,
-  DEFI_WEEKS, BYBIT_STEPS, TYPE_ICONS, C, BYBIT_PROXY_URL, AI_PROXY_URL, pill
+  DEFI_WEEKS, BYBIT_STEPS, TYPE_ICONS, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, X_ACCOUNTS, pill
 } from './constants'
 
 function ls(key, fallback) {
@@ -306,6 +306,22 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const [aiNews, setAiNews] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAsked, setAiAsked] = useState(false);
+  const [news, setNews] = useState([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsUpdated, setNewsUpdated] = useState(null);
+
+  const fetchNews = async () => {
+    setNewsLoading(true);
+    try {
+      const res = await fetch(`${NEWS_URL}/news`);
+      const data = await res.json();
+      setNews(data.items || []);
+      setNewsUpdated(data.updatedAt || null);
+    } catch {}
+    setNewsLoading(false);
+  };
+
+  useEffect(() => { if (tab === "radar") fetchNews(); }, [tab]);
   const [bybit, setBybit] = useState(null);
   const [bybitLoading, setBybitLoading] = useState(false);
   const [bybitError, setBybitError] = useState(null);
@@ -549,29 +565,117 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
           );
         })()}
 
-        {tab === "radar" && (
-          <div style={{ background: "rgba(0,229,255,0.03)", border: "1px solid rgba(0,229,255,0.12)", borderRadius: 12, padding: 20 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <span style={{ fontFamily: "monospace", fontSize: 11, color: "#00E5FF", letterSpacing: 2 }}>// AI РАДАР</span>
-              <button onClick={fetchAI} disabled={aiLoading} style={{ background: aiLoading ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 6, color: "#00E5FF", fontFamily: "monospace", fontSize: 10, padding: "5px 12px", cursor: aiLoading ? "wait" : "pointer" }}>
-                {aiLoading ? "СКАНИРУЮ..." : aiAsked ? "ОБНОВИТЬ" : "СКАНИРОВАТЬ"}
-              </button>
-            </div>
-            {!aiAsked && <div style={{ textAlign: "center", padding: "24px 0", color: "rgba(255,255,255,0.2)", fontFamily: "monospace", fontSize: 11 }}>нажми СКАНИРОВАТЬ для AI-анализа рынка</div>}
-            {aiNews.map((item, i) => (
-              <div key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", padding: "12px 0", display: "flex", gap: 12 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: sentColor[item.sentiment], marginTop: 5, flexShrink: 0, boxShadow: `0 0 6px ${sentColor[item.sentiment]}` }} />
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ color: "#fff", fontSize: 13, fontWeight: 500 }}>{item.title}</span>
-                    <span style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4, padding: "1px 6px", fontSize: 9, color: "#00E5FF", fontFamily: "monospace" }}>{item.tag}</span>
-                  </div>
-                  <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, lineHeight: 1.5 }}>{item.summary}</div>
+        {tab === "radar" && (() => {
+          const TAG_COLORS = { x: "#1DA1F2", media: "#7C5CFC", data: "#76FF03" };
+          const TAG_LABELS = { x: "𝕏 Twitter", media: "Медиа", data: "Данные" };
+          const [newsFilter, setNewsFilter] = useState("all");
+          const filtered = newsFilter === "all" ? news : news.filter(i => i.tag === newsFilter);
+          const timeSince = (dateStr) => {
+            if (!dateStr) return "";
+            const diff = Date.now() - new Date(dateStr).getTime();
+            const h = Math.floor(diff / 3600000);
+            const d = Math.floor(h / 24);
+            if (d > 0) return `${d}д назад`;
+            if (h > 0) return `${h}ч назад`;
+            return "только что";
+          };
+
+          return (
+            <div>
+              {/* Следим за */}
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                <div style={{ fontSize: 9, color: C.muted, letterSpacing: "0.15em", marginBottom: 12 }}>𝕏 СЛЕДИМ ЗА</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {X_ACCOUNTS.map(acc => (
+                    <a key={acc.handle} href={`https://x.com/${acc.handle}`} target="_blank" rel="noopener noreferrer"
+                      style={{ background: "rgba(29,161,242,0.06)", border: "1px solid rgba(29,161,242,0.18)", borderRadius: 8, padding: "7px 12px", textDecoration: "none", display: "flex", flexDirection: "column", gap: 2, minWidth: 140, transition: "all 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(29,161,242,0.12)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "rgba(29,161,242,0.06)"}
+                    >
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#1DA1F2" }}>@{acc.handle}</span>
+                      <span style={{ fontSize: 9, color: C.muted, lineHeight: 1.4 }}>{acc.focus}</span>
+                    </a>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* Лента новостей */}
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["all", "x", "media", "data"].map(f => (
+                      <button key={f} onClick={() => setNewsFilter(f)}
+                        style={{ padding: "3px 10px", borderRadius: 20, fontSize: 10, cursor: "pointer", fontWeight: 600, background: newsFilter === f ? (TAG_COLORS[f] || "#00E5FF") + "22" : "transparent", border: `1px solid ${newsFilter === f ? (TAG_COLORS[f] || "#00E5FF") : C.border}`, color: newsFilter === f ? (TAG_COLORS[f] || "#00E5FF") : C.muted }}>
+                        {f === "all" ? "Все" : TAG_LABELS[f]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {newsUpdated && <span style={{ fontSize: 9, color: C.muted }}>обновлено {new Date(newsUpdated).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>}
+                    <button onClick={fetchNews} disabled={newsLoading}
+                      style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.2)", borderRadius: 6, color: newsLoading ? C.muted : "#00E5FF", fontSize: 10, padding: "4px 10px", cursor: newsLoading ? "wait" : "pointer" }}>
+                      {newsLoading ? "↻ загрузка..." : "↻ обновить"}
+                    </button>
+                  </div>
+                </div>
+
+                {newsLoading && filtered.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "32px 0", color: C.muted, fontSize: 11 }}>загружаю ленту...</div>
+                )}
+                {!newsLoading && filtered.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "32px 0", color: C.muted, fontSize: 11 }}>нет новостей для этого фильтра</div>
+                )}
+
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {filtered.map((item, i) => (
+                    <a key={i} href={item.link} target="_blank" rel="noopener noreferrer"
+                      style={{ display: "flex", gap: 12, padding: "11px 0", borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : "none", textDecoration: "none", transition: "opacity 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.75"}
+                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                    >
+                      <div style={{ width: 3, borderRadius: 2, background: TAG_COLORS[item.tag] || "#00E5FF", flexShrink: 0, alignSelf: "stretch", minHeight: 16 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 3 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: C.text, lineHeight: 1.4, flex: 1 }}>{item.title}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, color: TAG_COLORS[item.tag] || "#00E5FF" }}>{item.source}</span>
+                          {item.date && <span style={{ fontSize: 9, color: C.muted }}>{timeSince(item.date)}</span>}
+                          {item.description && <span style={{ fontSize: 10, color: C.muted, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", maxWidth: 300 }}>{item.description}</span>}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 11, color: C.muted, flexShrink: 0, marginTop: 2 }}>↗</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+              {/* AI анализ */}
+              <div style={{ background: "rgba(0,229,255,0.03)", border: "1px solid rgba(0,229,255,0.12)", borderRadius: 12, padding: 16, marginTop: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <span style={{ fontFamily: "monospace", fontSize: 11, color: "#00E5FF", letterSpacing: 2 }}>// AI АНАЛИЗ РЫНКА</span>
+                  <button onClick={fetchAI} disabled={aiLoading}
+                    style={{ background: aiLoading ? "rgba(0,229,255,0.05)" : "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", borderRadius: 6, color: "#00E5FF", fontFamily: "monospace", fontSize: 10, padding: "5px 12px", cursor: aiLoading ? "wait" : "pointer" }}>
+                    {aiLoading ? "АНАЛИЗИРУЮ..." : aiAsked ? "ОБНОВИТЬ" : "ЗАПРОСИТЬ"}
+                  </button>
+                </div>
+                {!aiAsked && <div style={{ textAlign: "center", padding: "16px 0", color: "rgba(255,255,255,0.2)", fontFamily: "monospace", fontSize: 11 }}>нажми ЗАПРОСИТЬ — получишь AI-сводку по рынку</div>}
+                {aiNews.map((item, i) => (
+                  <div key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", padding: "10px 0", display: "flex", gap: 12 }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: sentColor[item.sentiment], marginTop: 5, flexShrink: 0, boxShadow: `0 0 6px ${sentColor[item.sentiment]}` }} />
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <span style={{ color: "#fff", fontSize: 12, fontWeight: 500 }}>{item.title}</span>
+                        <span style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.15)", borderRadius: 4, padding: "1px 6px", fontSize: 9, color: "#00E5FF" }}>{item.tag}</span>
+                      </div>
+                      <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, lineHeight: 1.5 }}>{item.summary}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
