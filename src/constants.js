@@ -1,12 +1,21 @@
 export const STORAGE_KEYS = {
-  wishes: "wishlist_state",
-  defi: "defi_positions_v2",
-  hw: "defi_hw",
-  way: "way-to-1m-v1",
+  wishes:   "wishlist_state",
+  defi:     "defi_positions_v2",
+  hw:       "defi_hw",
+  way:      "way-to-1m-v1",
+  networth: "networth_v1",
 };
 
+export const NW_INITIAL = [
+  { month: "2026-01", rate: 76,    nwRub: 26070000, nwUsd: 343026, assets: { kv: 16000000, avto: 6000000, sklad: 15000000, crypto: 8000  }, liabilities: { ipoteka: 11358000, credit: 180000 } },
+  { month: "2026-02", rate: 78.19, nwRub: 26266900, nwUsd: 335937, assets: { kv: 16000000, avto: 6000000, sklad: 15000000, crypto: 10000 }, liabilities: { ipoteka: 11355000, credit: 160000 } },
+  { month: "2026-03", rate: 78,    nwRub: 27056000, nwUsd: 346872, assets: { kv: 18000000, avto: 5000000, sklad: 15000000, crypto: 7000  }, liabilities: { ipoteka: 11350000, credit: 140000 } },
+  { month: "2026-04", rate: 77,    nwRub: 27075000, nwUsd: 351623, assets: { kv: 18000000, avto: 5000000, sklad: 15000000, crypto: 7000  }, liabilities: { ipoteka: 11344000, credit: 120000 } },
+  { month: "2026-05", rate: 74,    nwRub: 27080000, nwUsd: 365946, assets: { kv: 18000000, avto: 5000000, sklad: 15000000, crypto: 7000  }, liabilities: { ipoteka: 11338000, credit: 100000 } },
+];
+
 export const SYNC_URL   = "https://data-sync.dimitriyak.workers.dev";
-export const SYNC_TOKEN = "dboard2026";
+export const SYNC_TOKEN = "sync_68569e506ae8f1f6eb250dd4d0dfe081";
 
 export const WISH_CATEGORIES = [
   { id: "health", icon: "🏥", title: "Здоровье", color: "#fc5c7d", items: ["Жировик удалить","Зуб имплант","Режим сна — спать по 8 часов","Бросить курить","Укреплять мышцы для падела","Красивое тело без пивного живота"] },
