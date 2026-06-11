@@ -1332,11 +1332,133 @@ function NetWorthDashboard({ nwData, setNwData }) {
   );
 }
 
+const SETUP = {
+  projects: [
+    { name: "flow", desc: "Групповая дисциплина · спринты", stack: "TS core + React + Supabase", deploy: "Cloudflare Pages", color: "#76FF03", live: "flowsprints.pages.dev" },
+    { name: "master-dashboard", desc: "Этот дашборд · 1M$ · DeFi", stack: "React + Vite + Workers", deploy: "Cloudflare Pages", color: "#00E5FF", live: null },
+    { name: "tg-bot", desc: "AI-ассистент в Telegram", stack: "Python · Vertex · DeepSeek", deploy: "Google Cloud Run", color: "#7C5CFC", live: "@dimitriyakclaude_bot" },
+  ],
+  models: [
+    { name: "Gemini 2.5 Flash", via: "Vertex AI", tag: "по умолчанию", ok: true },
+    { name: "Gemini 2.5 Pro", via: "Vertex AI", tag: "vertex-pro", ok: true },
+    { name: "DeepSeek V3", via: "API", tag: "deepseek", ok: true },
+  ],
+  skills: [
+    { cmd: "/secrets-scan", desc: "поиск утёкших ключей в файлах и git-истории" },
+    { cmd: "/deploy-check", desc: "деплой + самопроверка по логам, починка если упало" },
+  ],
+  layers: [
+    { icon: "📄", name: "CLAUDE.md", desc: "глобальный + по проекту — грузится каждую сессию" },
+    { icon: "🧠", name: "Память", desc: "5 фактов: проекты, правила, безопасность" },
+    { icon: "⚡", name: "Скиллы", desc: "2 своих процедуры" },
+    { icon: "🪝", name: "Хук", desc: "SessionStart — сводка проектов на старте" },
+  ],
+  security: [
+    "GitHub → OAuth/Keychain",
+    "Cloudflare → OAuth",
+    "DeepSeek, Gemini, Telegram → ротированы",
+    "Grok, dboard2026 → убраны/ротированы",
+    "Секреты вычищены из файлов и remote",
+  ],
+};
+
+function SetupCard({ title, accent, children }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 18 }}>
+      <div style={{ fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 700, color: accent, marginBottom: 14 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function SetupDashboard() {
+  return (
+    <div style={{ maxWidth: 920, margin: "0 auto", padding: "24px 20px 60px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+        <span style={{ fontSize: 22 }}>🤖</span>
+        <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Claude Code · Setup</div>
+      </div>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Как устроена моя работа с AI по всем проектам</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+        <SetupCard title="Проекты" accent="#00E5FF">
+          {SETUP.projects.map(p => (
+            <div key={p.name} style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{p.name}</span>
+              </div>
+              <div style={{ fontSize: 12, color: C.muted, marginLeft: 16, marginTop: 2 }}>{p.desc}</div>
+              <div style={{ fontSize: 11, color: C.muted, marginLeft: 16, marginTop: 3, opacity: 0.8 }}>{p.stack} · {p.deploy}</div>
+              {p.live && <div style={{ fontSize: 11, color: p.color, marginLeft: 16, marginTop: 2 }}>{p.live}</div>}
+            </div>
+          ))}
+        </SetupCard>
+
+        <SetupCard title="AI-модели (бот)" accent="#7C5CFC">
+          {SETUP.models.map(m => (
+            <div key={m.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ color: "#76FF03", fontSize: 13 }}>✓</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{m.name}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{m.via} · {m.tag}</div>
+              </div>
+            </div>
+          ))}
+        </SetupCard>
+
+        <SetupCard title="4 слоя памяти" accent="#FFD700">
+          {SETUP.layers.map(l => (
+            <div key={l.name} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 15 }}>{l.icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{l.name}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{l.desc}</div>
+              </div>
+            </div>
+          ))}
+        </SetupCard>
+
+        <SetupCard title="Скиллы" accent="#00E5FF">
+          {SETUP.skills.map(s => (
+            <div key={s.cmd} style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#00E5FF", fontFamily: "'DM Mono', monospace" }}>{s.cmd}</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.desc}</div>
+            </div>
+          ))}
+        </SetupCard>
+
+        <SetupCard title="Безопасность" accent="#76FF03">
+          {SETUP.security.map((s, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "flex-start" }}>
+              <span style={{ color: "#76FF03", fontSize: 13, lineHeight: "16px" }}>✓</span>
+              <span style={{ fontSize: 12, color: C.text, lineHeight: "16px" }}>{s}</span>
+            </div>
+          ))}
+        </SetupCard>
+
+        <SetupCard title="Инфраструктура" accent="#FF9F45">
+          {[["☁️", "Cloudflare", "Pages + Workers"], ["🗄️", "Supabase", "БД · auth · edge"], ["🚀", "Google Cloud Run", "tg-bot 24/7"], ["📝", "Obsidian", "общая база знаний"]].map(([ic, n, d]) => (
+            <div key={n} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: 15 }}>{ic}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{n}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{d}</div>
+              </div>
+            </div>
+          ))}
+        </SetupCard>
+      </div>
+    </div>
+  );
+}
+
 const navItems = [
   { to: "/defi",      label: "Crypto",    color: "#00E5FF" },
   { to: "/way",       label: "1M$ Way",   color: "#FFD700" },
   { to: "/wishlist",  label: "Wishlist",  color: "#7C5CFC" },
   { to: "/networth",  label: "Networth", color: "#76FF03" },
+  { to: "/setup",     label: "Setup",     color: "#6C63FF" },
 ];
 
 function Shell({ children, accent, syncStatus }) {
@@ -1425,6 +1547,7 @@ function AppInner() {
         <Route path="/defi" element={<Navigate to="/defi/portfolio" replace />} />
         <Route path="/defi/:tab" element={<DefiDashboard positions={defiPositions} setPositions={setDefiPositions} hwChecked={hwChecked} setHwChecked={setHwChecked} />} />
         <Route path="/networth" element={<NetWorthDashboard nwData={nwData} setNwData={setNwData} />} />
+        <Route path="/setup" element={<SetupDashboard />} />
       </Routes>
     </Shell>
   );
