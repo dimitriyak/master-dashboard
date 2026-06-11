@@ -1373,6 +1373,8 @@ function SetupCard({ title, accent, children }) {
 
 const SETUP_STATUS_URL = "https://setup-status.dimitriyak.workers.dev";
 const SETUP_SERVICES = [
+  { name: "tg-bot (Cloud Run)", url: "https://tg-bot-247961408308.europe-west3.run.app/" },
+  { name: "flow (сайт)", url: "https://flowsprints.pages.dev/" },
   { name: "ai-proxy", url: "https://ai-proxy.dimitriyak.workers.dev" },
   { name: "defi-news", url: "https://defi-news.dimitriyak.workers.dev" },
   { name: "data-sync", url: "https://data-sync.dimitriyak.workers.dev" },
@@ -1394,13 +1396,20 @@ function SetupDashboard() {
   const [svc, setSvc] = useState(() => Object.fromEntries(SETUP_SERVICES.map(s => [s.name, null])));
 
   useEffect(() => {
-    fetch(SETUP_STATUS_URL).then(r => r.json()).then(setStatus).catch(() => setStatus({ error: true }));
-    SETUP_SERVICES.forEach(s => {
-      fetch(s.url, { mode: "no-cors" })
-        .then(() => setSvc(p => ({ ...p, [s.name]: true })))
-        .catch(() => setSvc(p => ({ ...p, [s.name]: false })));
-    });
+    const refresh = () => {
+      fetch(SETUP_STATUS_URL).then(r => r.json()).then(setStatus).catch(() => setStatus({ error: true }));
+      SETUP_SERVICES.forEach(s => {
+        fetch(s.url, { mode: "no-cors" })
+          .then(() => setSvc(p => ({ ...p, [s.name]: true })))
+          .catch(() => setSvc(p => ({ ...p, [s.name]: false })));
+      });
+    };
+    refresh();
+    const id = setInterval(refresh, 30000);
+    return () => clearInterval(id);
   }, []);
+
+  const dsLow = status?.deepseek?.balance && parseFloat(status.deepseek.balance) < 1;
 
   return (
     <div style={{ maxWidth: 920, margin: "0 auto", padding: "24px 20px 60px" }}>
@@ -1428,8 +1437,8 @@ function SetupDashboard() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <Dot ok={status ? status?.deepseek?.ok : null} />
-            <span style={{ fontSize: 13, color: C.text, flex: 1 }}>DeepSeek баланс</span>
-            <span style={{ fontSize: 12, color: "#76FF03", fontWeight: 600 }}>{status?.deepseek?.balance || "…"}</span>
+            <span style={{ fontSize: 13, color: C.text, flex: 1 }}>DeepSeek баланс {dsLow && <span title="Низкий баланс — пополни">⚠️</span>}</span>
+            <span style={{ fontSize: 12, color: dsLow ? "#FF6450" : "#76FF03", fontWeight: 600 }}>{status?.deepseek?.balance || "…"}</span>
           </div>
           {SETUP_SERVICES.map(s => (
             <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
