@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom'
 import {
-  STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL,
+  STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL, NW_INITIAL,
   DEFI_WEEKS, BYBIT_STEPS, TYPE_ICONS, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, X_ACCOUNTS, pill,
   SYNC_URL, SYNC_TOKEN,
 } from './constants'
@@ -63,7 +63,9 @@ function InstructionBlock({ color }) {
   );
 }
 
-function Overview({ wishState, defiPositions, defiHw, wayData, onNavigate }) {
+function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigate }) {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   const wishTotal = WISH_CATEGORIES.reduce((s, c) => s + c.items.length, 0);
   const wishDone = WISH_CATEGORIES.reduce((s, c) => s + c.items.filter((_, i) => wishState[c.id]?.[i]?.done).length, 0);
   const wishPct = Math.round((wishDone / wishTotal) * 100);
@@ -92,29 +94,63 @@ function Overview({ wishState, defiPositions, defiHw, wayData, onNavigate }) {
       {/* Header */}
       <div style={{ marginBottom: 40 }}>
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 6 }}>
-          {new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}
+          {now.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}
+          <span style={{ marginLeft: 10, fontFamily: "monospace", color: "#00E5FF" }}>{now.toLocaleTimeString("ru-RU")}</span>
         </div>
         <h1 style={{ fontSize: 30, fontWeight: 700, color: C.text, letterSpacing: "-0.02em", margin: 0 }}>Dashboard</h1>
       </div>
 
-      {/* Progress strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 32 }}>
-        {[
-          { label: "1M$ прогресс", pct: Math.round(wayProgress), color: "#FFD700" },
-          { label: "Цели выполнены", pct: wishPct, color: "#7C5CFC" },
-          { label: "Crypto учёба", pct: defiHwPct, color: "#00E5FF" },
-        ].map(s => (
-          <div key={s.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "16px 20px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ fontSize: 12, color: C.muted }}>{s.label}</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: s.color }}>{s.pct}%</div>
+
+      {/* Networth mini-card */}
+      {(() => {
+        const months = (nwData || []).sort((a, b) => a.month.localeCompare(b.month));
+        const latest = months[months.length - 1];
+        const prev   = months[months.length - 2];
+        if (!latest) return null;
+        const delta = prev ? latest.nwUsd - prev.nwUsd : 0;
+        const pct   = prev && prev.nwUsd ? ((delta / prev.nwUsd) * 100).toFixed(1) : null;
+        const MRU = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+        const fmtM = (m) => { const [y, mo] = m.split("-"); return `${MRU[parseInt(mo)-1]} ${y}`; };
+        // sparkline
+        const vals = months.map(d => d.nwUsd);
+        const minV = Math.min(...vals), maxV = Math.max(...vals);
+        const W = 120, H = 28;
+        const pts = vals.map((v, i) => {
+          const x = vals.length > 1 ? (i / (vals.length - 1)) * W : W / 2;
+          const y = H - ((v - minV) / (maxV - minV || 1)) * (H - 6) - 3;
+          return `${x},${y}`;
+        }).join(" ");
+        return (
+          <button onClick={() => onNavigate("networth")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 20px", marginBottom: 28, cursor: "pointer", width: "100%", textAlign: "left", transition: "border-color 0.2s" }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(118,255,3,0.35)"}
+            onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+          >
+            <div>
+              <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.1em", marginBottom: 4 }}>NETWORTH · {fmtM(latest.month)}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#76FF03" }}>${Math.round(latest.nwUsd / 1000)}K</span>
+                <span style={{ fontSize: 13, color: C.muted }}>₽{(latest.nwRub / 1_000_000).toFixed(2)}M</span>
+                {delta !== 0 && pct && (
+                  <span style={{ fontSize: 12, color: delta > 0 ? "#76FF03" : "#FF6450" }}>
+                    {delta > 0 ? "+" : ""}${Math.round(delta / 1000)}K ({pct}%)
+                  </span>
+                )}
+              </div>
             </div>
-            <div style={{ height: 3, background: C.border, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ width: `${s.pct}%`, height: "100%", background: s.color, borderRadius: 2, transition: "width 0.6s ease" }} />
-            </div>
-          </div>
-        ))}
-      </div>
+            {vals.length >= 2 && (
+              <svg width={W} height={H} style={{ flexShrink: 0, overflow: "visible" }}>
+                <polyline points={pts} fill="none" stroke="#76FF03" strokeWidth="1.5" strokeLinejoin="round" opacity="0.8" />
+                {vals.map((v, i) => {
+                  const x = (i / (vals.length - 1)) * W;
+                  const y = H - ((v - minV) / (maxV - minV || 1)) * (H - 6) - 3;
+                  return <circle key={i} cx={x} cy={y} r={i === vals.length - 1 ? 3 : 2} fill="#76FF03" opacity={i === vals.length - 1 ? 1 : 0.5} />;
+                })}
+              </svg>
+            )}
+          </button>
+        );
+      })()}
 
       {/* Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
@@ -172,36 +208,47 @@ function Overview({ wishState, defiPositions, defiHw, wayData, onNavigate }) {
 }
 
 function WishesDashboard({ wishState, setWishState }) {
-  const [addInputs, setAddInputs] = useState({});
+  const [addState, setAddState] = useState({}); // { [catId]: { open, text, imageUrl } }
+  const [imgErrors, setImgErrors] = useState({});
+
   const total = WISH_CATEGORIES.reduce((s, c) => s + c.items.length, 0);
-  const done = WISH_CATEGORIES.reduce((s, c) => s + c.items.filter((_, i) => wishState[c.id]?.[i]?.done).length, 0);
+  const done  = WISH_CATEGORIES.reduce((s, c) => s + c.items.filter((_, i) => wishState[c.id]?.[i]?.done).length, 0);
+
+  const getAdd = (catId) => addState[catId] || { open: false, text: "", imageUrl: "" };
+  const setAdd = (catId, patch) => setAddState(p => ({ ...p, [catId]: { ...getAdd(catId), ...patch } }));
 
   const toggleItem = (catId, idx, text) => {
-    setWishState(prev => {
-      const next = { ...prev, [catId]: { ...prev[catId], [idx]: { text, done: !prev[catId]?.[idx]?.done } } };
-      lsSet(STORAGE_KEYS.wishes, next);
-      return next;
-    });
+    setWishState(prev => ({
+      ...prev,
+      [catId]: { ...prev[catId], [idx]: { ...(prev[catId]?.[idx] || { text }), done: !prev[catId]?.[idx]?.done } },
+    }));
   };
 
-  const addItem = (catId, text) => {
+  const addItem = (catId) => {
+    const { text, imageUrl } = getAdd(catId);
     if (!text.trim()) return;
+    const key = `new_${Date.now()}`;
+    setWishState(prev => ({
+      ...prev,
+      [catId]: { ...prev[catId], [key]: { text: text.trim(), done: false, ...(imageUrl.trim() ? { image: imageUrl.trim() } : {}) } },
+    }));
+    setAdd(catId, { open: false, text: "", imageUrl: "" });
+  };
+
+  const deleteItem = (catId, key) => {
     setWishState(prev => {
-      const nextIdx = `new_${Date.now()}`;
-      const next = { ...prev, [catId]: { ...prev[catId], [nextIdx]: { text, done: false } } };
-      lsSet(STORAGE_KEYS.wishes, next);
-      return next;
+      const next = { ...prev[catId] };
+      delete next[key];
+      return { ...prev, [catId]: next };
     });
-    setAddInputs(prev => ({ ...prev, [catId]: "" }));
   };
 
   return (
     <div style={{ padding: "24px 28px", maxWidth: 1100, margin: "0 auto" }}>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Wishlist</div>
-        </div>
-        <div style={{ display: "flex", gap: 16 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Wishlist</div>
+        <div style={{ display: "flex", gap: 20 }}>
           {[{ label: "всего", val: total, color: C.text }, { label: "выполнено", val: done, color: "#5cfcb8" }, { label: "осталось", val: total - done, color: "#fcb85c" }].map(s => (
             <div key={s.label} style={{ textAlign: "center" }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.val}</div>
@@ -210,39 +257,126 @@ function WishesDashboard({ wishState, setWishState }) {
           ))}
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 16 }}>
         {WISH_CATEGORIES.map(cat => {
-          const extraItems = Object.entries(wishState[cat.id] || {}).filter(([k]) => k.startsWith("new_")).map(([k, v]) => ({ key: k, ...v }));
-          const allItems = [...cat.items.map((text, i) => ({ key: i, text: wishState[cat.id]?.[i]?.text ?? text, done: wishState[cat.id]?.[i]?.done ?? false })), ...extraItems];
+          const extraItems = Object.entries(wishState[cat.id] || {})
+            .filter(([k]) => k.startsWith("new_"))
+            .map(([k, v]) => ({ key: k, ...v }));
+          const allItems = [
+            ...cat.items.map((text, i) => ({ key: i, text: wishState[cat.id]?.[i]?.text ?? text, done: wishState[cat.id]?.[i]?.done ?? false, image: wishState[cat.id]?.[i]?.image })),
+            ...extraItems,
+          ];
           const pct = allItems.length ? Math.round((allItems.filter(x => x.done).length / allItems.length) * 100) : 0;
+          const { open: addOpen, text: addText, imageUrl: addImg } = getAdd(cat.id);
+
           return (
             <div key={cat.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: "hidden" }}>
-              <div style={{ height: 3, background: `linear-gradient(90deg, ${cat.color}, ${cat.color}88)` }} />
+              {/* Top accent line */}
+              <div style={{ height: 3, background: `linear-gradient(90deg, ${cat.color}, ${cat.color}55)` }} />
+
+              {/* Header */}
               <div style={{ padding: "14px 16px 10px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 18 }}>{cat.icon}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}>{cat.title}</span>
                 <span style={{ fontSize: 10, color: C.muted, background: C.surface, borderRadius: 100, padding: "2px 8px" }}>{allItems.filter(x => x.done).length}/{allItems.length}</span>
               </div>
-              <div style={{ height: 3, background: C.border, margin: "0 16px" }}>
-                <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${cat.color}, ${cat.color}99)`, transition: "width 0.4s" }} />
+
+              {/* Progress bar */}
+              <div style={{ height: 3, background: C.border }}>
+                <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${cat.color}, ${cat.color}88)`, transition: "width 0.4s" }} />
               </div>
-              <ul style={{ listStyle: "none", padding: "8px 12px 6px" }}>
-                {allItems.map(item => (
-                  <li key={item.key} onClick={() => toggleItem(cat.id, item.key, item.text)}
-                    style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 4px", cursor: "pointer", borderRadius: 8 }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                  >
-                    <div style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: 1, border: item.done ? "none" : `2px solid ${C.border}`, background: item.done ? cat.color + "44" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
-                      {item.done && <span style={{ color: cat.color, fontSize: 10, fontWeight: 900 }}>✓</span>}
-                    </div>
-                    <span style={{ fontSize: 13, color: item.done ? C.muted : C.text, textDecoration: item.done ? "line-through" : "none", lineHeight: 1.4 }}>{item.text}</span>
-                  </li>
-                ))}
+
+              {/* Items */}
+              <ul style={{ listStyle: "none", padding: "8px 12px 4px", margin: 0 }}>
+                {allItems.map(item => {
+                  const imgKey = `${cat.id}-${item.key}`;
+                  const imgFailed = imgErrors[imgKey];
+                  return (
+                    <li key={item.key}
+                      style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 4px", borderRadius: 8, cursor: "pointer" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      {/* Checkbox */}
+                      <div onClick={() => toggleItem(cat.id, item.key, item.text)}
+                        style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: item.image && !imgFailed ? 4 : 1,
+                          border: item.done ? "none" : `2px solid ${C.border}`,
+                          background: item.done ? cat.color + "44" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
+                        {item.done && <span style={{ color: cat.color, fontSize: 10, fontWeight: 900 }}>✓</span>}
+                      </div>
+
+                      {/* Content */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        {item.image && !imgFailed && (
+                          <img
+                            src={item.image} alt={item.text}
+                            onError={() => setImgErrors(p => ({ ...p, [imgKey]: true }))}
+                            onClick={() => toggleItem(cat.id, item.key, item.text)}
+                            style={{ width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 8, marginBottom: 6, opacity: item.done ? 0.4 : 1, transition: "opacity 0.2s" }}
+                          />
+                        )}
+                        <span onClick={() => toggleItem(cat.id, item.key, item.text)}
+                          style={{ fontSize: 13, color: item.done ? C.muted : C.text, textDecoration: item.done ? "line-through" : "none", lineHeight: 1.4, display: "block" }}>
+                          {item.text}
+                        </span>
+                      </div>
+
+                      {/* Delete (только для добавленных вручную) */}
+                      {String(item.key).startsWith("new_") && (
+                        <button onClick={(e) => { e.stopPropagation(); deleteItem(cat.id, item.key); }}
+                          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.5 }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                          onMouseLeave={e => e.currentTarget.style.opacity = "0.5"}
+                        >×</button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
-              <div style={{ padding: "4px 12px 12px", display: "flex", gap: 8 }}>
-                <input value={addInputs[cat.id] || ""} onChange={e => setAddInputs(p => ({ ...p, [cat.id]: e.target.value }))} onKeyDown={e => e.key === "Enter" && addItem(cat.id, addInputs[cat.id] || "")} placeholder="Добавить..." style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", color: C.text, fontSize: 12, outline: "none" }} />
-                <button onClick={() => addItem(cat.id, addInputs[cat.id] || "")} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", color: cat.color, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>+</button>
+
+              {/* Add form */}
+              <div style={{ padding: "4px 12px 12px" }}>
+                {!addOpen ? (
+                  <button onClick={() => setAdd(cat.id, { open: true })}
+                    style={{ width: "100%", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "7px", color: C.muted, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                    + Добавить цель
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <input
+                      autoFocus
+                      value={addText}
+                      onChange={e => setAdd(cat.id, { text: e.target.value })}
+                      onKeyDown={e => e.key === "Enter" && addItem(cat.id)}
+                      placeholder="Название цели..."
+                      style={{ background: C.surface, border: `1px solid ${cat.color}55`, borderRadius: 8, padding: "7px 10px", color: C.text, fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                    />
+                    <input
+                      value={addImg}
+                      onChange={e => setAdd(cat.id, { imageUrl: e.target.value })}
+                      placeholder="URL картинки (необязательно)"
+                      style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", color: C.text, fontSize: 12, outline: "none", fontFamily: "inherit" }}
+                    />
+                    {addImg.trim() && (
+                      <img src={addImg.trim()} alt="preview"
+                        onError={e => e.target.style.display = "none"}
+                        style={{ width: "100%", maxHeight: 100, objectFit: "cover", borderRadius: 8, opacity: 0.7 }}
+                      />
+                    )}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => addItem(cat.id)}
+                        style={{ flex: 1, background: cat.color + "18", border: `1px solid ${cat.color}44`, borderRadius: 8, padding: "7px", color: cat.color, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+                        Добавить
+                      </button>
+                      <button onClick={() => setAdd(cat.id, { open: false, text: "", imageUrl: "" })}
+                        style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", color: C.muted, fontSize: 12, cursor: "pointer" }}>
+                        Отмена
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -328,7 +462,10 @@ function TaskRow({ taskText, taskDesc, isDone, onToggle, isLast, showLegacy }) {
 function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const { tab = "portfolio" } = useParams();
   const navigate = useNavigate();
-  const [openWeek, setOpenWeek] = useState(0);
+  const [openWeek, setOpenWeek] = useState(() => {
+    const first = DEFI_WEEKS.find(w => w.tasks.some((_, i) => !hwChecked[`${w.week}-${i}`]));
+    return first ? first.week : DEFI_WEEKS[0].week;
+  });
   const [notes, setNotes] = useState(() => ls("defi_notes", []));
   const [noteInput, setNoteInput] = useState("");
   const [noteTag, setNoteTag] = useState("general");
@@ -348,6 +485,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const [bybit, setBybit] = useState(null);
   const [bybitLoading, setBybitLoading] = useState(false);
   const [bybitError, setBybitError] = useState(null);
+  const [bybitHistory, setBybitHistory] = useState(() => ls("bybit_history", []));
 
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
 
@@ -361,7 +499,16 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         const coins = account.coin
           .filter(c => parseFloat(c.usdValue) >= 1)
           .sort((a, b) => parseFloat(b.usdValue) - parseFloat(a.usdValue));
-        setBybit({ totalEquity: parseFloat(account.totalEquity), coins });
+        const equity = parseFloat(account.totalEquity);
+        setBybit({ totalEquity: equity, coins });
+        // Сохраняем снапшот (один в день)
+        const today = new Date().toISOString().slice(0, 10);
+        setBybitHistory(prev => {
+          const filtered = prev.filter(e => e.date !== today);
+          const next = [...filtered, { date: today, balance: equity }].slice(-60);
+          lsSet("bybit_history", next);
+          return next;
+        });
       } else { setBybitError(data.retMsg); }
     } catch (e) { setBybitError(e.message); }
     setBybitLoading(false);
@@ -370,8 +517,16 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   useEffect(() => { fetchBybit(); }, []);
 
   const toggleHw = (key) => {
+    const [weekStr] = key.split("-");
+    const weekNum = parseInt(weekStr);
     const next = { ...hwChecked, [key]: !hwChecked[key] };
-    setHwChecked(next); lsSet(STORAGE_KEYS.hw, next);
+    setHwChecked(next);
+    // Если неделя стала полностью выполненной — авто-раскрыть следующую
+    const week = DEFI_WEEKS.find(w => w.week === weekNum);
+    if (week && week.tasks.every((_, i) => next[`${weekNum}-${i}`])) {
+      const nextWeek = DEFI_WEEKS.find(w => w.week > weekNum);
+      if (nextWeek) setTimeout(() => setOpenWeek(nextWeek.week), 300);
+    }
   };
 
   const updatePosition = (id, updates) => setPositions(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -402,6 +557,29 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         {bybit && (
           <>
             <span style={{ fontSize: 16, fontWeight: 700, color: "#00E5FF" }}>${bybit.totalEquity.toFixed(2)}</span>
+            {/* Sparkline */}
+            {bybitHistory.length >= 2 && (() => {
+              const vals = bybitHistory.map(h => h.balance);
+              const minV = Math.min(...vals), maxV = Math.max(...vals);
+              const W = 80, H = 24;
+              const pts = vals.map((v, i) => {
+                const x = (i / (vals.length - 1)) * W;
+                const y = H - ((v - minV) / (maxV - minV || 1)) * (H - 4) - 2;
+                return `${x},${y}`;
+              }).join(" ");
+              const delta = vals[vals.length-1] - vals[vals.length-2];
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <svg width={W} height={H} style={{ overflow: "visible" }}>
+                    <polyline points={pts} fill="none" stroke="#00E5FF" strokeWidth="1.5" strokeLinejoin="round" opacity="0.7" />
+                    <circle cx={parseFloat(pts.split(" ").pop().split(",")[0])} cy={parseFloat(pts.split(" ").pop().split(",")[1])} r="2.5" fill="#00E5FF" />
+                  </svg>
+                  <span style={{ fontSize: 11, color: delta >= 0 ? "#76FF03" : "#FF6450" }}>
+                    {delta >= 0 ? "+" : ""}{delta.toFixed(0)}$
+                  </span>
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {bybit.coins.map(c => (
                 <div key={c.coin} style={{ background: "rgba(0,229,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 10px", display: "flex", gap: 6, alignItems: "center" }}>
@@ -415,7 +593,11 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, padding: "16px 28px", borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ padding: "14px 28px 6px", borderTop: `1px solid ${C.border}` }}>
+        <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>DeFi</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, padding: "10px 28px", borderBottom: `1px solid ${C.border}` }}>
         {[
           { label: "БЮДЖЕТ", val: `$${totalAllocated.toLocaleString()}`, color: C.text },
           { label: "ТЕКУЩЕЕ", val: `$${totalCurrent.toLocaleString()}`, color: "#00E5FF" },
@@ -817,16 +999,22 @@ function RadarDashboard({ embedded = false }) {
                 {brief.opportunities?.length > 0 && (
                   <div>
                     <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Возможности</div>
-                    {brief.opportunities.map((item, i) => (
-                      <div key={i} style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 8 }}>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.protocol}</span>
-                          {item.apy && <span style={{ fontSize: 13, fontWeight: 700, color: "#00E5FF" }}>{item.apy}</span>}
-                          <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 10, background: "rgba(255,255,255,0.06)", color: C.muted, border: `1px solid ${C.border}` }}>{item.risk}</span>
+                    {brief.opportunities.map((item, i) => {
+                      const riskColor = item.risk === "low" ? "#76FF03" : item.risk === "medium" ? "#FFD700" : "#FF6450";
+                      const riskLabel = item.risk === "low" ? "Conservative" : item.risk === "medium" ? "Moderate" : "Aggressive";
+                      return (
+                        <div key={i} style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 8, borderLeft: `3px solid ${riskColor}` }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{item.protocol}</span>
+                            {item.chain && <span style={{ fontSize: 10, color: C.muted }}>{item.chain}</span>}
+                            {item.apy && <span style={{ fontSize: 13, fontWeight: 700, color: riskColor }}>{item.apy}</span>}
+                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: riskColor + "18", color: riskColor, border: `1px solid ${riskColor}44`, fontWeight: 600 }}>{riskLabel}</span>
+                            {item.tvl && <span style={{ fontSize: 10, color: C.muted }}>TVL {item.tvl}</span>}
+                          </div>
+                          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>{item.reason}</div>
                         </div>
-                        <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>{item.reason}</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -895,10 +1083,260 @@ function RadarDashboard({ embedded = false }) {
   );
 }
 
+// ── NETWORTH DASHBOARD ───────────────────────────────────────────────────────
+function NetWorthDashboard({ nwData, setNwData }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ month: "", rate: "", kv: "", avto: "", sklad: "", crypto: "", ipoteka: "", credit: "" });
+
+  const months = [...nwData].sort((a, b) => a.month.localeCompare(b.month));
+  const latest = months[months.length - 1];
+  const prev   = months[months.length - 2];
+  const nwDelta    = latest && prev ? latest.nwUsd - prev.nwUsd : 0;
+  const nwDeltaPct = prev && prev.nwUsd ? ((nwDelta / prev.nwUsd) * 100).toFixed(1) : 0;
+
+  const MONTHS_RU = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
+  const fmtMonth = (m) => { const [, mo] = m.split("-"); return `${MONTHS_RU[parseInt(mo)-1]}`; };
+  const fmtMonthFull = (m) => { const [y, mo] = m.split("-"); return `${MONTHS_RU[parseInt(mo)-1]} ${y}`; };
+  const fmtRub = (n) => `₽${(n/1000000).toFixed(2)}M`;
+  const fmtUsd = (n) => `$${Math.round(n/1000)}K`;
+
+  const addMonth = () => {
+    const r = parseFloat(form.rate) || 1;
+    const cryptoRub = parseFloat(form.crypto || 0) * r;
+    const totalAssets = parseFloat(form.kv||0) + parseFloat(form.avto||0) + parseFloat(form.sklad||0) + cryptoRub;
+    const totalLiab   = parseFloat(form.ipoteka||0) + parseFloat(form.credit||0);
+    const nwRub = Math.round(totalAssets - totalLiab);
+    const nwUsd = Math.round(nwRub / r);
+    const entry = {
+      month: form.month, rate: r, nwRub, nwUsd,
+      assets:      { kv: parseFloat(form.kv||0), avto: parseFloat(form.avto||0), sklad: parseFloat(form.sklad||0), crypto: parseFloat(form.crypto||0) },
+      liabilities: { ipoteka: parseFloat(form.ipoteka||0), credit: parseFloat(form.credit||0) },
+    };
+    setNwData([...nwData.filter(d => d.month !== form.month), entry]);
+    setShowForm(false);
+    setForm({ month: "", rate: "", kv: "", avto: "", sklad: "", crypto: "", ipoteka: "", credit: "" });
+  };
+
+  // SVG chart
+  const W = 600, H = 80;
+  const vals = months.map(d => d.nwUsd);
+  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  const range = maxV - minV || 1;
+  const pts = vals.map((v, i) => {
+    const x = months.length > 1 ? (i / (months.length - 1)) * W : W / 2;
+    const y = H - ((v - minV) / range) * (H - 20) - 10;
+    return [x, y];
+  });
+  const polyline = pts.map(p => p.join(",")).join(" ");
+  const area = `${pts[0]?.[0]??0},${H} ${polyline} ${pts[pts.length-1]?.[0]??W},${H}`;
+
+  const inputStyle = { width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "7px 10px", color: C.text, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box" };
+  const NW_COLOR = "#76FF03";
+
+  return (
+    <div style={{ padding: "24px 20px", maxWidth: 900, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 6 }}>NETWORTH</div>
+          <div style={{ fontSize: 36, fontWeight: 700, color: NW_COLOR, lineHeight: 1 }}>{latest ? fmtUsd(latest.nwUsd) : "—"}</div>
+          <div style={{ fontSize: 15, color: C.muted, marginTop: 4 }}>{latest ? fmtRub(latest.nwRub) : "—"}</div>
+          {nwDelta !== 0 && prev && (
+            <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: nwDelta > 0 ? NW_COLOR : "#FF6450" }}>
+                {nwDelta > 0 ? "+" : ""}{fmtUsd(nwDelta)}
+              </span>
+              <span style={{ fontSize: 12, color: nwDelta > 0 ? NW_COLOR : "#FF6450" }}>({nwDeltaPct}%)</span>
+              <span style={{ fontSize: 11, color: C.muted }}>vs {fmtMonthFull(prev.month)}</span>
+            </div>
+          )}
+        </div>
+        <button onClick={() => setShowForm(s => !s)}
+          style={{ background: `rgba(118,255,3,0.1)`, border: `1px solid rgba(118,255,3,0.3)`, borderRadius: 8, color: NW_COLOR, fontSize: 12, padding: "8px 18px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+          + Добавить месяц
+        </button>
+      </div>
+
+      {/* Add month form */}
+      {showForm && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 16 }}>Новый месяц</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+            {[
+              { key: "month",   label: "Месяц (ГГГГ-ММ)", ph: "2026-06" },
+              { key: "rate",    label: "Курс $/₽",         ph: "80" },
+              { key: "kv",      label: "Квартира ₽",       ph: "18000000" },
+              { key: "avto",    label: "Авто ₽",           ph: "5000000" },
+              { key: "sklad",   label: "Доля Склад ₽",     ph: "15000000" },
+              { key: "crypto",  label: "Крипта $",         ph: "7000" },
+              { key: "ipoteka", label: "Ипотека ₽",        ph: "11338000" },
+              { key: "credit",  label: "Кредиты ₽",        ph: "100000" },
+            ].map(f => (
+              <div key={f.key}>
+                <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{f.label}</div>
+                <input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                  placeholder={f.ph} style={inputStyle} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <button onClick={addMonth}
+              style={{ background: "rgba(118,255,3,0.15)", border: "1px solid rgba(118,255,3,0.4)", borderRadius: 8, color: NW_COLOR, fontSize: 12, padding: "8px 22px", cursor: "pointer", fontWeight: 600 }}>
+              Сохранить
+            </button>
+            <button onClick={() => setShowForm(false)}
+              style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "8px 18px", cursor: "pointer" }}>
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Chart */}
+      {months.length >= 2 && (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "20px 20px 12px", marginBottom: 16 }}>
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.1em", marginBottom: 12 }}>ДИНАМИКА NETWORTH ($)</div>
+          <svg viewBox={`-20 0 ${W + 40} ${H + 28}`} style={{ width: "100%", overflow: "visible" }}>
+            <defs>
+              <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={NW_COLOR} stopOpacity="0.25" />
+                <stop offset="100%" stopColor={NW_COLOR} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <polygon points={area} fill="url(#nwGrad)" />
+            <polyline points={polyline} fill="none" stroke={NW_COLOR} strokeWidth="2" strokeLinejoin="round" />
+            {pts.map(([x, y], i) => (
+              <g key={i}>
+                <circle cx={x} cy={y} r={4} fill={NW_COLOR} />
+                <text x={x} y={y - 10} textAnchor="middle" fill={NW_COLOR} fontSize="10" fontWeight="600">
+                  {fmtUsd(months[i].nwUsd)}
+                </text>
+                <text x={x} y={H + 20} textAnchor="middle" fill="#9090B0" fontSize="9">
+                  {fmtMonth(months[i].month)}
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
+      )}
+
+      {/* Assets + Liabilities */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        {/* Assets */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.1em", marginBottom: 16 }}>АКТИВЫ</div>
+          {latest && (() => {
+            const rows = [
+              { label: "Квартира",     val: latest.assets.kv,                          color: "#00E5FF" },
+              { label: "Авто",         val: latest.assets.avto,                         color: "#FFD700" },
+              { label: "Доля Склад",   val: latest.assets.sklad,                        color: "#7C5CFC" },
+              { label: `Крипта ($${latest.assets.crypto.toLocaleString()})`, val: latest.assets.crypto * latest.rate, color: NW_COLOR },
+            ];
+            const total = rows.reduce((s, r) => s + r.val, 0);
+            return (
+              <>
+                {rows.map(r => (
+                  <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: r.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: C.muted }}>{r.label}</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{fmtRub(r.val)}</span>
+                  </div>
+                ))}
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, color: C.muted }}>Итого активы</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: NW_COLOR }}>{fmtRub(total)}</span>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+
+        {/* Liabilities */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.1em", marginBottom: 16 }}>ОБЯЗАТЕЛЬСТВА</div>
+          {latest && (() => {
+            const rows = [
+              { label: "Ипотека", val: latest.liabilities.ipoteka, color: "#FF6450" },
+              { label: "Кредиты", val: latest.liabilities.credit,  color: "#FF9800" },
+            ];
+            const totalLiab   = rows.reduce((s, r) => s + r.val, 0);
+            const totalAssets = latest.assets.kv + latest.assets.avto + latest.assets.sklad + latest.assets.crypto * latest.rate;
+            return (
+              <>
+                {rows.map(r => (
+                  <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: r.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: C.muted }}>{r.label}</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#FF6450" }}>−{fmtRub(r.val)}</span>
+                  </div>
+                ))}
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 12, color: C.muted }}>Обязательства</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#FF6450" }}>−{fmtRub(totalLiab)}</span>
+                </div>
+                <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>Networth</span>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: NW_COLOR }}>{fmtRub(latest.nwRub)}</div>
+                    <div style={{ fontSize: 12, color: NW_COLOR, opacity: 0.7 }}>{fmtUsd(latest.nwUsd)}</div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* History table */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20 }}>
+        <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.1em", marginBottom: 16 }}>ИСТОРИЯ</div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr>
+                {["Месяц","Курс","Активы ₽","Обяз. ₽","NW ₽","NW $","Δ $"].map(h => (
+                  <th key={h} style={{ textAlign: "right", padding: "4px 10px", color: C.muted, fontWeight: 600, fontSize: 10, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[...months].reverse().map((m, i, arr) => {
+                const prevRow = arr[i + 1];
+                const delta = prevRow ? m.nwUsd - prevRow.nwUsd : null;
+                const ta = m.assets.kv + m.assets.avto + m.assets.sklad + m.assets.crypto * m.rate;
+                const tl = m.liabilities.ipoteka + m.liabilities.credit;
+                return (
+                  <tr key={m.month} style={{ borderTop: `1px solid ${C.border}` }}>
+                    <td style={{ padding: "9px 10px", color: C.text,    textAlign: "right", whiteSpace: "nowrap" }}>{fmtMonthFull(m.month)}</td>
+                    <td style={{ padding: "9px 10px", color: C.muted,   textAlign: "right" }}>{m.rate}</td>
+                    <td style={{ padding: "9px 10px", color: C.text,    textAlign: "right", whiteSpace: "nowrap" }}>{fmtRub(ta)}</td>
+                    <td style={{ padding: "9px 10px", color: "#FF6450", textAlign: "right", whiteSpace: "nowrap" }}>−{fmtRub(tl)}</td>
+                    <td style={{ padding: "9px 10px", color: NW_COLOR,  textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>{fmtRub(m.nwRub)}</td>
+                    <td style={{ padding: "9px 10px", color: NW_COLOR,  textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>{fmtUsd(m.nwUsd)}</td>
+                    <td style={{ padding: "9px 10px", textAlign: "right", whiteSpace: "nowrap",
+                      color: delta == null ? C.muted : delta > 0 ? NW_COLOR : "#FF6450" }}>
+                      {delta == null ? "—" : `${delta > 0 ? "+" : ""}${fmtUsd(delta)}`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const navItems = [
-  { to: "/defi",    label: "Crypto",   color: "#00E5FF" },
-  { to: "/way",     label: "1M$ Way",  color: "#FFD700" },
-  { to: "/wishlist",label: "Wishlist", color: "#7C5CFC" },
+  { to: "/defi",      label: "Crypto",    color: "#00E5FF" },
+  { to: "/way",       label: "1M$ Way",   color: "#FFD700" },
+  { to: "/wishlist",  label: "Wishlist",  color: "#7C5CFC" },
+  { to: "/networth",  label: "Networth", color: "#76FF03" },
 ];
 
 function Shell({ children, accent, syncStatus }) {
@@ -935,23 +1373,26 @@ function Shell({ children, accent, syncStatus }) {
 }
 
 // Debounced cloud savers (created once outside component)
-const saveWishes   = debounce((v) => cloudSet(STORAGE_KEYS.wishes, v), 2000);
-const saveDefi     = debounce((v) => cloudSet(STORAGE_KEYS.defi, v),   2000);
-const saveHw       = debounce((v) => cloudSet(STORAGE_KEYS.hw, v),     2000);
-const saveWay      = debounce((v) => cloudSet(STORAGE_KEYS.way, v),    2000);
+const saveWishes   = debounce((v) => cloudSet(STORAGE_KEYS.wishes,   v), 2000);
+const saveDefi     = debounce((v) => cloudSet(STORAGE_KEYS.defi,     v), 2000);
+const saveHw       = debounce((v) => cloudSet(STORAGE_KEYS.hw,       v), 2000);
+const saveWay      = debounce((v) => cloudSet(STORAGE_KEYS.way,      v), 2000);
+const saveNw       = debounce((v) => cloudSet(STORAGE_KEYS.networth, v), 2000);
 
 function AppInner() {
-  const [wishState,     setWishStateRaw]     = useState(() => ls(STORAGE_KEYS.wishes, {}));
-  const [defiPositions, setDefiPositionsRaw] = useState(() => ls(STORAGE_KEYS.defi, null) || DEFI_INITIAL);
-  const [hwChecked,     setHwCheckedRaw]     = useState(() => ls(STORAGE_KEYS.hw, {}));
-  const [wayData,       setWayDataRaw]       = useState(() => ls(STORAGE_KEYS.way, WAY_INITIAL));
+  const [wishState,     setWishStateRaw]     = useState(() => ls(STORAGE_KEYS.wishes,   {}));
+  const [defiPositions, setDefiPositionsRaw] = useState(() => ls(STORAGE_KEYS.defi,    null) || DEFI_INITIAL);
+  const [hwChecked,     setHwCheckedRaw]     = useState(() => ls(STORAGE_KEYS.hw,      {}));
+  const [wayData,       setWayDataRaw]       = useState(() => ls(STORAGE_KEYS.way,     WAY_INITIAL));
+  const [nwData,        setNwDataRaw]        = useState(() => ls(STORAGE_KEYS.networth, NW_INITIAL));
   const [syncStatus,    setSyncStatus]       = useState("idle"); // idle | loading | synced | error
 
   // Wrapped setters: save to localStorage + debounce cloud sync
-  const setWishState     = (v) => { const next = typeof v === "function" ? v(wishState)     : v; lsSet(STORAGE_KEYS.wishes, next); setWishStateRaw(next);     saveWishes(next); };
-  const setDefiPositions = (v) => { const next = typeof v === "function" ? v(defiPositions) : v; lsSet(STORAGE_KEYS.defi,    next); setDefiPositionsRaw(next); saveDefi(next); };
-  const setHwChecked     = (v) => { const next = typeof v === "function" ? v(hwChecked)     : v; lsSet(STORAGE_KEYS.hw,      next); setHwCheckedRaw(next);     saveHw(next); };
-  const setWayData       = (v) => { const next = typeof v === "function" ? v(wayData)       : v; lsSet(STORAGE_KEYS.way,     next); setWayDataRaw(next);       saveWay(next); };
+  const setWishState     = (v) => { const next = typeof v === "function" ? v(wishState)     : v; lsSet(STORAGE_KEYS.wishes,   next); setWishStateRaw(next);     saveWishes(next); };
+  const setDefiPositions = (v) => { const next = typeof v === "function" ? v(defiPositions) : v; lsSet(STORAGE_KEYS.defi,     next); setDefiPositionsRaw(next); saveDefi(next); };
+  const setHwChecked     = (v) => { const next = typeof v === "function" ? v(hwChecked)     : v; lsSet(STORAGE_KEYS.hw,       next); setHwCheckedRaw(next);     saveHw(next); };
+  const setWayData       = (v) => { const next = typeof v === "function" ? v(wayData)       : v; lsSet(STORAGE_KEYS.way,      next); setWayDataRaw(next);       saveWay(next); };
+  const setNwData        = (v) => { const next = typeof v === "function" ? v(nwData)        : v; lsSet(STORAGE_KEYS.networth, next); setNwDataRaw(next);        saveNw(next); };
 
   // On mount: load from cloud and merge (cloud wins if newer)
   useEffect(() => {
@@ -961,11 +1402,13 @@ function AppInner() {
       cloudGet(STORAGE_KEYS.defi),
       cloudGet(STORAGE_KEYS.hw),
       cloudGet(STORAGE_KEYS.way),
-    ]).then(([wishes, defi, hw, way]) => {
-      if (wishes) { lsSet(STORAGE_KEYS.wishes, wishes); setWishStateRaw(wishes); }
-      if (defi)   { lsSet(STORAGE_KEYS.defi,   defi);   setDefiPositionsRaw(defi); }
-      if (hw)     { lsSet(STORAGE_KEYS.hw,      hw);     setHwCheckedRaw(hw); }
-      if (way)    { lsSet(STORAGE_KEYS.way,     way);    setWayDataRaw(way); }
+      cloudGet(STORAGE_KEYS.networth),
+    ]).then(([wishes, defi, hw, way, nw]) => {
+      if (wishes) { lsSet(STORAGE_KEYS.wishes,   wishes); setWishStateRaw(wishes); }
+      if (defi)   { lsSet(STORAGE_KEYS.defi,     defi);   setDefiPositionsRaw(defi); }
+      if (hw)     { lsSet(STORAGE_KEYS.hw,        hw);     setHwCheckedRaw(hw); }
+      if (way)    { lsSet(STORAGE_KEYS.way,       way);    setWayDataRaw(way); }
+      if (nw)     { lsSet(STORAGE_KEYS.networth,  nw);     setNwDataRaw(nw); }
       setSyncStatus("synced");
     }).catch(() => setSyncStatus("error"));
   }, []);
@@ -976,11 +1419,12 @@ function AppInner() {
   return (
     <Shell accent={accent} syncStatus={syncStatus}>
       <Routes>
-        <Route path="/" element={<Overview wishState={wishState} defiPositions={defiPositions} defiHw={hwChecked} wayData={wayData} onNavigate={(id) => navigate(id === "home" ? "/" : `/${id === "wishes" ? "wishlist" : id}`)} />} />
+        <Route path="/" element={<Overview wishState={wishState} defiPositions={defiPositions} defiHw={hwChecked} wayData={wayData} nwData={nwData} onNavigate={(id) => navigate(id === "home" ? "/" : `/${id === "wishes" ? "wishlist" : id}`)} />} />
         <Route path="/way" element={<WayDashboard data={wayData} setData={setWayData} />} />
         <Route path="/wishlist" element={<WishesDashboard wishState={wishState} setWishState={setWishState} />} />
         <Route path="/defi" element={<Navigate to="/defi/portfolio" replace />} />
         <Route path="/defi/:tab" element={<DefiDashboard positions={defiPositions} setPositions={setDefiPositions} hwChecked={hwChecked} setHwChecked={setHwChecked} />} />
+        <Route path="/networth" element={<NetWorthDashboard nwData={nwData} setNwData={setNwData} />} />
       </Routes>
     </Shell>
   );

@@ -276,20 +276,42 @@ async function generateBrief(newsItems, apyData, env) {
     { position: "Sonic/Berachain Multi (Various)",                            reasonHint: "Аирдроп/поинты стратегия — доход вне APY, оценивать отдельно." },
   ];
 
-  // opportunities: lending→LP с TVL≥$5M (смена риск-профиля)
-  const codeOpportunities = apyData
-    .filter(a =>
-      ["aerodrome-slipstream", "uniswap-v3"].includes(a.project) &&
-      a.apy >= 40 && a.apy < 150 &&
-      parseFloat(a.tvlUsd.replace(/[$M]/g, "")) >= 5
-    )
-    .slice(0, 3)
+  // opportunities: три уровня риска — профессиональный подход
+  const CONSERVATIVE_PROJECTS = ["aave-v3", "morpho-blue", "compound-v3", "spark", "fluid-protocol", "ethena"];
+  const MODERATE_PROJECTS      = ["aerodrome-v1", "velodrome-v2", "curve-dex", "convex-finance", "pendle", "lombard-lbtc"];
+  const AGGRESSIVE_PROJECTS    = ["aerodrome-slipstream", "uniswap-v3", "kodiak", "dolomite"];
+
+  const conservative = apyData
+    .filter(a => CONSERVATIVE_PROJECTS.includes(a.project) && a.apy >= 4 && a.apy < 25
+      && parseFloat(a.tvlUsd.replace(/[$MBK]/g, "") || 0) >= 10)
+    .sort((a, b) => b.apy - a.apy).slice(0, 2)
     .map(a => ({
       protocol: PROTOCOL_NAMES[a.project] || a.project,
-      chain: a.chain, apy: `${a.apy}%`, tvl: a.tvlUsd,
-      reasonHint: `APY ${a.apy}% TVL ${a.tvlUsd}. Смена риск-профиля: lending (без IL) → LP (с IL и нестабильным APY).`,
-      risk: "high",
+      chain: a.chain, apy: `${a.apy}%`, tvl: a.tvlUsd, risk: "low",
+      reasonHint: `Lending/стейблы ${a.apy}% APY, TVL ${a.tvlUsd}. Нет impermanent loss, проверенный протокол. Подходит как база портфеля.`,
     }));
+
+  const moderate = apyData
+    .filter(a => MODERATE_PROJECTS.includes(a.project) && a.apy >= 15 && a.apy < 60
+      && parseFloat(a.tvlUsd.replace(/[$MBK]/g, "") || 0) >= 3)
+    .sort((a, b) => b.apy - a.apy).slice(0, 2)
+    .map(a => ({
+      protocol: PROTOCOL_NAMES[a.project] || a.project,
+      chain: a.chain, apy: `${a.apy}%`, tvl: a.tvlUsd, risk: "medium",
+      reasonHint: `${a.apy}% APY, TVL ${a.tvlUsd}. Умеренный риск: есть impermanent loss или токен-наград, но TVL даёт уверенность.`,
+    }));
+
+  const aggressive = apyData
+    .filter(a => AGGRESSIVE_PROJECTS.includes(a.project) && a.apy >= 40 && a.apy < 150
+      && parseFloat(a.tvlUsd.replace(/[$MBK]/g, "") || 0) >= 5)
+    .sort((a, b) => b.apy - a.apy).slice(0, 2)
+    .map(a => ({
+      protocol: PROTOCOL_NAMES[a.project] || a.project,
+      chain: a.chain, apy: `${a.apy}%`, tvl: a.tvlUsd, risk: "high",
+      reasonHint: `LP ${a.apy}% APY, TVL ${a.tvlUsd}. Высокий APY за счёт emissions + fees. Нестабилен, есть IL при движении цены ±20%.`,
+    }));
+
+  const codeOpportunities = [...conservative, ...moderate, ...aggressive];
 
   // AI пишет ТОЛЬКО summary и ищет urgent в новостях — структура генерируется кодом
   const topNews = newsCtx || "нет новостей";
