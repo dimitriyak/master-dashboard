@@ -1371,16 +1371,78 @@ function SetupCard({ title, accent, children }) {
   );
 }
 
+const SETUP_STATUS_URL = "https://setup-status.dimitriyak.workers.dev";
+const SETUP_SERVICES = [
+  { name: "ai-proxy", url: "https://ai-proxy.dimitriyak.workers.dev" },
+  { name: "defi-news", url: "https://defi-news.dimitriyak.workers.dev" },
+  { name: "data-sync", url: "https://data-sync.dimitriyak.workers.dev" },
+];
+const SETUP_LINKS = [
+  { label: "Бот", href: "https://t.me/dimitriyakclaude_bot", color: "#7C5CFC" },
+  { label: "flow", href: "https://github.com/dimitriyak/flow", color: "#76FF03" },
+  { label: "dashboard", href: "https://github.com/dimitriyak/master-dashboard", color: "#00E5FF" },
+  { label: "tg-bot", href: "https://github.com/dimitriyak/tg-bot", color: "#FFD700" },
+];
+
+function Dot({ ok }) {
+  const color = ok === null ? C.muted : ok ? "#76FF03" : "#FF6450";
+  return <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0, boxShadow: ok ? `0 0 6px ${color}` : "none" }} />;
+}
+
 function SetupDashboard() {
+  const [status, setStatus] = useState(null);
+  const [svc, setSvc] = useState(() => Object.fromEntries(SETUP_SERVICES.map(s => [s.name, null])));
+
+  useEffect(() => {
+    fetch(SETUP_STATUS_URL).then(r => r.json()).then(setStatus).catch(() => setStatus({ error: true }));
+    SETUP_SERVICES.forEach(s => {
+      fetch(s.url, { mode: "no-cors" })
+        .then(() => setSvc(p => ({ ...p, [s.name]: true })))
+        .catch(() => setSvc(p => ({ ...p, [s.name]: false })));
+    });
+  }, []);
+
   return (
     <div style={{ maxWidth: 920, margin: "0 auto", padding: "24px 20px 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
         <span style={{ fontSize: 22 }}>🤖</span>
         <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Claude Code · Setup</div>
       </div>
-      <div style={{ fontSize: 13, color: C.muted, marginBottom: 24 }}>Как устроена моя работа с AI по всем проектам</div>
+      <div style={{ fontSize: 13, color: C.muted, marginBottom: 18 }}>Как устроена моя работа с AI по всем проектам</div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+        {SETUP_LINKS.map(l => (
+          <a key={l.label} href={l.href} target="_blank" rel="noreferrer"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, color: l.color, fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
+            ↗ {l.label}
+          </a>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 14 }}>
+        <SetupCard title="Живой статус" accent="#76FF03">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Dot ok={status ? status?.bot?.ok : null} />
+            <span style={{ fontSize: 13, color: C.text, flex: 1 }}>Telegram-бот</span>
+            <span style={{ fontSize: 12, color: C.muted }}>{status?.bot?.name ? `@${status.bot.name}` : "…"}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Dot ok={status ? status?.deepseek?.ok : null} />
+            <span style={{ fontSize: 13, color: C.text, flex: 1 }}>DeepSeek баланс</span>
+            <span style={{ fontSize: 12, color: "#76FF03", fontWeight: 600 }}>{status?.deepseek?.balance || "…"}</span>
+          </div>
+          {SETUP_SERVICES.map(s => (
+            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Dot ok={svc[s.name]} />
+              <span style={{ fontSize: 13, color: C.text, flex: 1 }}>{s.name}</span>
+              <span style={{ fontSize: 11, color: C.muted }}>worker</span>
+            </div>
+          ))}
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>
+            {status?.updatedAt ? `обновлено ${new Date(status.updatedAt).toLocaleTimeString("ru")}` : "загрузка…"}
+          </div>
+        </SetupCard>
+
         <SetupCard title="Проекты" accent="#00E5FF">
           {SETUP.projects.map(p => (
             <div key={p.name} style={{ marginBottom: 14 }}>
