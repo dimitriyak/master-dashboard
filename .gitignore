@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 .env.local
+
+# wrangler local cache
+.wrangler
+workers/.wrangler

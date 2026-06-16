@@ -1,6 +1,6 @@
 export const STORAGE_KEYS = {
   wishes:   "wishlist_state",
-  defi:     "defi_positions_v2",
+  defi:     "defi_positions_v5",
   hw:       "defi_hw",
   way:      "way-to-1m-v1",
   networth: "networth_v1",
@@ -19,8 +19,6 @@ export const SYNC_TOKEN = "sync_68569e506ae8f1f6eb250dd4d0dfe081";
 
 export const WISH_CATEGORIES = [
   { id: "health", icon: "🏥", title: "Здоровье", color: "#fc5c7d", items: ["Жировик удалить","Зуб имплант","Режим сна — спать по 8 часов","Бросить курить","Укреплять мышцы для падела","Красивое тело без пивного живота"] },
-  { id: "sklld", icon: "🏢", title: "Skllad", color: "#7c5cfc", items: ["Маркетолог","Выход из операционки склад","Мотивация директор","Sklld 3 млн+ прибыли, +10% ежемесячно"] },
-  { id: "ft", icon: "⚡", title: "FT", color: "#fcb85c", items: ["Ликвидация ФТ — свобода"] },
   { id: "personal", icon: "🪞", title: "Личное", color: "#5cfcb8", items: ["Фотосессия для аватарки","Татуировка — рукав, грудь"] },
   { id: "family", icon: "🏠", title: "Семья", color: "#5cbffc", items: ["Дом для родителей в Питере","Квартира 100м² — 40 млн","Ребёнок","Путешествия 1 раз в квартал","2 авто в семье"] },
   { id: "hobbies", icon: "🎿", title: "Увлечения", color: "#fc5cf0", items: ["Падел — выиграть категорию Б","Ракетка, форма для падела","Сноуборд Сочи/Шерегеш","Экипа для сноуборда","Турнир покер","Комп для стримов","Наушники AirPods","Logitech G PRO X Wireless"] },
@@ -28,27 +26,28 @@ export const WISH_CATEGORIES = [
 ];
 
 export const DEFI_INITIAL = [
-  { id: 1, protocol: "Aave", network: "Base", asset: "USDC", allocated: 400, current: 0, apy: 0, status: "pending", type: "lending", color: "#B6509E" },
-  { id: 2, protocol: "Aerodrome", network: "Base", asset: "USDC/ETH LP", allocated: 400, current: 0, apy: 0, status: "pending", type: "lp", color: "#FF0420" },
-  { id: 3, protocol: "Lombard", network: "Ethereum", asset: "LBTC", allocated: 300, current: 0, apy: 0, status: "pending", type: "btcfi", color: "#F7931A" },
-  { id: 4, protocol: "Aave (PAXG)", network: "Ethereum", asset: "PAXG", allocated: 300, current: 0, apy: 0, status: "pending", type: "gold", color: "#D4AF37" },
-  { id: 5, protocol: "Sonic / Berachain", network: "Multi", asset: "Various", allocated: 300, current: 0, apy: 0, status: "pending", type: "new", color: "#00E5FF" },
-  { id: 6, protocol: "Airdrop Farming", network: "Multi", asset: "Points", allocated: 300, current: 0, apy: 0, status: "pending", type: "airdrop", color: "#76FF03" },
+  { id: 1, protocol: "Morpho",       network: "Base",         asset: "USDC",       invested: 400, current: 0, apy: 0, status: "active", type: "lending", color: "#7C5CFC", date: "2026-06-12" },
+  { id: 2, protocol: "Aerodrome",    network: "Base",         asset: "USDC/WETH",  invested: 400, current: 0, apy: 0, status: "active", type: "lp",      color: "#FF0420", matchId: "aero-usdc-weth", date: "2026-06-13", costBasis: [{ t: "WETH", qty: 0.12, p0: 1666.89 }] },
+  { id: 10,protocol: "Aerodrome",    network: "Base",         asset: "USDC/AERO",  invested: 186, current: 0, apy: 0, status: "active", type: "lp",      color: "#FF0420", matchId: "aero-usdc-aero", date: "2026-06-15", costBasis: [{ t: "AERO", qty: 229.7, p0: 0.376 }] },
+  { id: 3, protocol: "Aave",         network: "Ethereum",     asset: "WBTC",       invested: 295, current: 0, apy: 0, status: "active", type: "btcfi",   color: "#B6509E", matchId: "aave-eth-wbtc", date: "2026-06-13", costBasis: [{ t: "WBTC", qty: 0.0046, p0: 64176.69 }] },
+  { id: 4, protocol: "Aave",         network: "Ethereum",     asset: "USDC (долг)",invested: 0,   current: 0, apy: 0, status: "active", type: "debt",    color: "#FF6450", matchId: "aave-eth-usdc-debt", date: "2026-06-13" },
+  { id: 5, protocol: "Hyperliquid",  network: "Hyperliquid",  asset: "USDC (HLP)", invested: 119.5, current: 0, apy: 0, status: "active", type: "vault",   color: "#00E5FF", matchId: "hl-", date: "2026-06-13" },
+  { id: 6, protocol: "Lighter",      network: "Lighter",      asset: "Public Pools",invested: 200, current: 0, apy: 0, status: "active", type: "vault",   color: "#4B8BFF", matchId: "lighter-public-pools", date: "2026-06-14" },
+  { id: 8, protocol: "Loopscale",    network: "Solana",       asset: "ONyc + Earn",invested: 431, current: 0, apy: 0, status: "active", type: "vault",   color: "#14F195", matchId: "loopscale-loops", date: "2026-06-14" },
+  { id: 9, protocol: "Kodiak",       network: "Berachain",    asset: "WETH/WBERA", invested: 209, current: 0, apy: 0, status: "active", type: "lp",      color: "#5BC0EB", matchId: "kodiak-bault-weth-wbera", date: "2026-06-14", costBasis: [{ t: "WETH", qty: 0.0593, p0: 1658.71 }, { t: "WBERA", qty: 442.09, p0: 0.2495 }] },
 ];
 
 export const WAY_INITIAL = {
   milestones: [
-    { id: "m1", amount: 10000, label: "10K $", reached: false },
-    { id: "m2", amount: 50000, label: "50K $", reached: false },
-    { id: "m3", amount: 100000, label: "100K $", reached: false },
-    { id: "m4", amount: 250000, label: "250K $", reached: false },
-    { id: "m5", amount: 500000, label: "500K $", reached: false },
-    { id: "m6", amount: 1000000, label: "1M $", reached: false },
+    { id: "m1", amount: 10000,   label: "10K $",  reached: false },
+    { id: "m2", amount: 50000,   label: "50K $",  reached: false },
+    { id: "m3", amount: 100000,  label: "100K $", reached: false },
+    { id: "m4", amount: 250000,  label: "250K $", reached: false },
+    { id: "m5", amount: 500000,  label: "500K $", reached: false },
+    { id: "m6", amount: 1000000, label: "1M $",   reached: false },
   ],
   currentAmount: 0,
-  tasks: [
-    { id: "w1", text: "Настроить интеграцию API между Claude и Google Таблицами", done: false, priority: "high", category: "Инфраструктура" },
-  ],
+  tasks: [],
   log: [],
 };
 
@@ -172,16 +171,42 @@ export const BYBIT_STEPS = [
   { step: "6", text: "Скопируй API Key и Secret Key — показываются только один раз!", note: "⚠️ Secret нигде не сохраняй кроме прокси-сервера" },
 ];
 
-export const TYPE_ICONS = { lending: "◈", lp: "⟳", btcfi: "₿", gold: "◉", new: "✦", airdrop: "⬡" };
+export const TYPE_ICONS = { lending: "◈", lp: "⟳", btcfi: "₿", gold: "◉", new: "✦", airdrop: "⬡", debt: "↯", vault: "◎" };
+
+// Protocol → domain for favicon lookup (used as the position card icon).
+export const PROTOCOL_DOMAINS = {
+  "aave":        "aave.com",
+  "morpho":      "morpho.org",
+  "aerodrome":   "aerodrome.finance",
+  "hyperliquid": "hyperliquid.xyz",
+  "lighter":     "lighter.xyz",
+  "loopscale":   "loopscale.com",
+  "kamino":      "kamino.finance",
+};
+
+// Favicon URL for a protocol name (falls back gracefully if domain unknown).
+export const protocolIcon = (protocol) => {
+  const key = (protocol || "").toLowerCase().split(" ")[0];
+  const domain = PROTOCOL_DOMAINS[key];
+  return domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
+};
 
 export const C = {
   bg: "#080810", surface: "#0E0E1A", card: "#12121F", border: "#1E1E30",
   text: "#E8E8F4", muted: "#5A5A7A", accent: "#6C63FF",
+  // Семантические акценты — использовать вместо сырых hex
+  gold: "#FFD700",   // Way / деньги / цель
+  green: "#76FF03",  // рост / успех / Networth
+  cyan: "#00E5FF",   // крипто / DeFi
+  violet: "#7C5CFC", // личное / AI / Wishlist
+  red: "#FF6450",    // ошибки / падение
+  orange: "#FF9800", // предупреждения / changelog
 };
 
 export const BYBIT_PROXY_URL = "https://bybit-proxy.dimitriyak.workers.dev";
 export const AI_PROXY_URL = import.meta.env.VITE_AI_PROXY_URL || "https://ai-proxy.dimitriyak.workers.dev";
 export const NEWS_URL = "https://defi-news.dimitriyak.workers.dev";
+export const DEFI_PORTFOLIO_URL = "https://defi-portfolio.dimitriyak.workers.dev";
 
 export const X_ACCOUNTS = [
   { handle: "DefiIgnas",         name: "Ignas DeFi",        focus: "Разборы протоколов, yield стратегии" },
@@ -192,6 +217,8 @@ export const X_ACCOUNTS = [
   { handle: "DeFi_Made_Here",    name: "DeFi Made Here",    focus: "Обучение, механики" },
   { handle: "SmallCapScientist", name: "SmallCapScientist", focus: "Альфа, возможности" },
 ];
+
+export const AI_STATS_URL = "https://ai-stats.dimitriyak.workers.dev";
 
 export const pill = (color, text, small) => ({
   display: "inline-flex", alignItems: "center",

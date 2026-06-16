@@ -32,10 +32,19 @@ function isAuthorized(request, env) {
   return auth === `Bearer ${env.SYNC_TOKEN}`;
 }
 
+// Browser requests must come from the dashboard origin (production + Pages previews) or localhost.
+// Non-browser callers (no Origin header) still pass — the Bearer token is the primary gate.
+function isAllowedOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return true;
+  return origin.endsWith("dimitriyak.pages.dev") || origin.startsWith("http://localhost");
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
 
+    if (!isAllowedOrigin(request)) return resp({ error: "Forbidden origin" }, 403);
     if (!isAuthorized(request, env)) return unauthorized();
 
     const url = new URL(request.url);
