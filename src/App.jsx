@@ -693,7 +693,7 @@ function ProtocolCard({ group }) {
                 {r.date ? ` · ${fmtDate(r.date)}` : ""}
               </div>
               {r.rewards?.aeroEarned > 0 && (
-                <div style={{ fontSize: 9, color: "#FF0420", fontFamily: "monospace", marginTop: 2 }}>
+                <div style={{ fontSize: 9, color: "#FFD700", fontFamily: "monospace", marginTop: 2 }}>
                   ⚡ {r.rewards.aeroEarned} AERO{r.rewards.aeroEarnedUsd != null ? ` ≈$${r.rewards.aeroEarnedUsd}` : ""}
                 </div>
               )}
