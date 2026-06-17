@@ -205,10 +205,10 @@ export const protocolUrl = (protocol) => PROTOCOL_URLS[(protocol || "").toLowerC
 
 export const C = {
   bg: "#080810", surface: "#0E0E1A", card: "#12121F", border: "#1E1E30",
-  text: "#E8E8F4", muted: "#5A5A7A", accent: "#6C63FF",
+  text: "#E8E8F4", muted: "#8A8AA8", accent: "#6C63FF",
   // Семантические акценты — использовать вместо сырых hex
   gold: "#FFD700",   // Way / деньги / цель
-  green: "#76FF03",  // рост / успех / Networth
+  green: "#4ADE80",  // рост / успех / Networth
   cyan: "#00E5FF",   // крипто / DeFi
   violet: "#7C5CFC", // личное / AI / Wishlist
   red: "#FF6450",    // ошибки / падение

@@ -11,7 +11,7 @@ const CARD_SHADOW = "inset 0 1px 0 rgba(255,255,255,0.03), 0 8px 24px rgba(0,0,0
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 let _toastFn = null;
-const toast = (msg, color = "#76FF03") => _toastFn?.(msg, color);
+const toast = (msg, color = "#4ADE80") => _toastFn?.(msg, color);
 
 function ToastHost() {
   const [toasts, setToasts] = useState([]);
@@ -115,7 +115,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <div style={{ fontSize: 14, color: C.muted }}>
             {now.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}
-            <span style={{ marginLeft: 10, fontFamily: "monospace", color: "#76FF03" }}>{now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
+            <span style={{ marginLeft: 10, fontFamily: "monospace", color: "#4ADE80" }}>{now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
           </div>
           <button onClick={() => onNavigate("weekly")} style={{ background: "rgba(255,152,0,0.1)", border: "1px solid rgba(255,152,0,0.3)", borderRadius: 8, color: "#FF9800", fontSize: 11, fontWeight: 600, padding: "5px 12px", cursor: "pointer" }}>
             Weekly Report →
@@ -155,10 +155,10 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
             <div>
               <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 4 }}>NETWORTH · {fmtM(latest.month)}</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 22, fontWeight: 700, color: "#76FF03" }}>${Math.round(latest.nwUsd / 1000)}K</span>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#4ADE80" }}>${Math.round(latest.nwUsd / 1000)}K</span>
                 <span style={{ fontSize: 14, color: C.muted }}>₽{(latest.nwRub / 1_000_000).toFixed(2)}M</span>
                 {delta !== 0 && pct && (
-                  <span style={{ fontSize: 12, color: delta > 0 ? "#76FF03" : "#FF6450" }}>
+                  <span style={{ fontSize: 12, color: delta > 0 ? "#4ADE80" : "#FF6450" }}>
                     {delta > 0 ? "+" : ""}${Math.round(delta / 1000)}K ({pct}%)
                   </span>
                 )}
@@ -178,11 +178,11 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
             </div>
             {vals.length >= 2 && (
               <svg width={W} height={H} style={{ flexShrink: 0, overflow: "visible" }}>
-                <polyline points={pts} fill="none" stroke="#76FF03" strokeWidth="1.5" strokeLinejoin="round" opacity="0.8" />
+                <polyline points={pts} fill="none" stroke="#4ADE80" strokeWidth="1.5" strokeLinejoin="round" opacity="0.8" />
                 {vals.map((v, i) => {
                   const x = (i / (vals.length - 1)) * W;
                   const y = H - ((v - minV) / (maxV - minV || 1)) * (H - 6) - 3;
-                  return <circle key={i} cx={x} cy={y} r={i === vals.length - 1 ? 3 : 2} fill="#76FF03" opacity={i === vals.length - 1 ? 1 : 0.5} />;
+                  return <circle key={i} cx={x} cy={y} r={i === vals.length - 1 ? 3 : 2} fill="#4ADE80" opacity={i === vals.length - 1 ? 1 : 0.5} />;
                 })}
               </svg>
             )}
@@ -456,7 +456,7 @@ function WishesDashboard({ wishState, setWishState }) {
           ))}
         </div>
         <div style={{ display: "flex", gap: 20 }}>
-          {[{ label: "всего", val: total, color: C.text }, { label: "выполнено", val: done, color: "#76FF03" }, { label: "осталось", val: total - done, color: "#FF9800" }].map(s => (
+          {[{ label: "всего", val: total, color: C.text }, { label: "выполнено", val: done, color: "#4ADE80" }, { label: "осталось", val: total - done, color: "#FF9800" }].map(s => (
             <div key={s.label} style={{ textAlign: "center" }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.val}</div>
               <div style={{ fontSize: 11, color: C.muted }}>{s.label}</div>
@@ -678,8 +678,8 @@ function DistributionChart({ groups }) {
 // One card per protocol; each pool / loan / debt is a row inside.
 function ProtocolCard({ group }) {
   const { protocol, color, status, items, current, pnl, hasPnl, growth, yield_, hasGrowth } = group;
-  const pnlColor = (v) => v >= 0 ? "#76FF03" : "#FF6450";
-  const statusColors = { active: "#76FF03", pending: "rgba(255,255,255,0.2)", paused: "#FFD700" };
+  const pnlColor = (v) => v >= 0 ? "#4ADE80" : "#FF6450";
+  const statusColors = { active: "#4ADE80", pending: "rgba(255,255,255,0.2)", paused: "#FFD700" };
 
   const rows = [];
   for (const it of items) {
@@ -735,9 +735,9 @@ function ProtocolCard({ group }) {
               )}
             </div>
             <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: r.isDebt ? "#FF6450" : (r.live ? "#76FF03" : "#fff") }}>{fmtUsd(r.usd)}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: r.isDebt ? "#FF6450" : (r.live ? "#4ADE80" : "#fff") }}>{fmtUsd(r.usd)}</div>
               {r.pnl != null && (
-                <div style={{ fontSize: 9, fontFamily: "monospace", color: r.pnl >= 0 ? "#76FF03" : "#FF6450" }}>{fmtPnl(r.pnl)}</div>
+                <div style={{ fontSize: 9, fontFamily: "monospace", color: r.pnl >= 0 ? "#4ADE80" : "#FF6450" }}>{fmtPnl(r.pnl)}</div>
               )}
             </div>
           </div>
@@ -752,7 +752,7 @@ function TaskRow({ taskText, taskDesc, isDone, onToggle, isLast }) {
   return (
     <div style={{ borderBottom: isLast ? "none" : `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "9px 0 6px" }}>
-        <button onClick={onToggle} style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 2, border: isDone ? "none" : `1px solid ${C.border}`, background: isDone ? "#76FF03" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+        <button onClick={onToggle} style={{ width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 2, border: isDone ? "none" : `1px solid ${C.border}`, background: isDone ? "#4ADE80" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
           {isDone && <span style={{ color: "#000", fontSize: 10, fontWeight: 900 }}>✓</span>}
         </button>
         <div style={{ flex: 1 }}>
@@ -1094,7 +1094,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
               <span style={{ fontSize: 12, color: C.muted }}>BTC <b style={{ color: C.text }}>${prices.btc?.toLocaleString()}</b></span>
             </>
           )}
-          <div style={{ fontFamily: "monospace", fontSize: 14, color: "#00E5FF" }}>{time.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</div>
+          <div style={{ fontFamily: "monospace", fontSize: 14, color: C.muted }}>{time.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</div>
         </div>
       </div>
 
@@ -1144,7 +1144,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
                     <polyline points={pts} fill="none" stroke="#00E5FF" strokeWidth="1.5" strokeLinejoin="round" opacity="0.7" />
                     <circle cx={parseFloat(pts.split(" ").pop().split(",")[0])} cy={parseFloat(pts.split(" ").pop().split(",")[1])} r="2.5" fill="#00E5FF" />
                   </svg>
-                  <span style={{ fontSize: 11, color: delta >= 0 ? "#76FF03" : "#FF6450" }}>
+                  <span style={{ fontSize: 11, color: delta >= 0 ? "#4ADE80" : "#FF6450" }}>
                     {delta >= 0 ? "+" : ""}{delta.toFixed(0)}$
                   </span>
                 </div>
@@ -1169,12 +1169,12 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
 
       <div className="page-pad-sm" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 10, borderBottom: `1px solid ${C.border}` }}>
         {[
-          { label: "ПОРТФЕЛЬ", val: liveTotal > 0 ? `$${liveTotal.toFixed(0)}` : "—",                                                                          color: "#00E5FF" },
+          { label: "ПОРТФЕЛЬ", val: liveTotal > 0 ? `$${liveTotal.toFixed(0)}` : "—",                                                                          color: C.text },
           { label: "ВЛОЖЕНО",  val: liveInvested > 0 ? `$${liveInvested.toFixed(0)}` : "—",                                                                    color: C.text },
-          { label: "P&L",      val: liveInvested > 0 ? `${livePnl >= 0 ? "+" : ""}$${Math.abs(livePnl) < 1 ? livePnl.toFixed(2) : livePnl.toFixed(0)}` : "—", color: liveInvested === 0 ? C.muted : livePnl >= 0 ? "#76FF03" : "#FF6450" },
-          { label: "7Д",       val: pnl7d != null ? `${pnl7d >= 0 ? "+" : ""}$${pnl7d.toFixed(0)}` : "—",                                                      color: pnl7d == null ? C.muted : pnl7d >= 0 ? "#76FF03" : "#FF6450" },
-          { label: "30Д",      val: pnl30d != null ? `${pnl30d >= 0 ? "+" : ""}$${pnl30d.toFixed(0)}` : "—",                                                   color: pnl30d == null ? C.muted : pnl30d >= 0 ? "#76FF03" : "#FF6450" },
-          { label: "СР. APY",  val: liveAvgApy > 0 ? `${liveAvgApy.toFixed(1)}%` : "—",                                                                        color: "#FFD700" },
+          { label: "P&L",      val: liveInvested > 0 ? `${livePnl >= 0 ? "+" : ""}$${Math.abs(livePnl) < 1 ? livePnl.toFixed(2) : livePnl.toFixed(0)}` : "—", color: liveInvested === 0 ? C.muted : livePnl >= 0 ? "#4ADE80" : "#FF6450" },
+          { label: "7Д",       val: pnl7d != null ? `${pnl7d >= 0 ? "+" : ""}$${pnl7d.toFixed(0)}` : "—",                                                      color: pnl7d == null ? C.muted : pnl7d >= 0 ? "#4ADE80" : "#FF6450" },
+          { label: "30Д",      val: pnl30d != null ? `${pnl30d >= 0 ? "+" : ""}$${pnl30d.toFixed(0)}` : "—",                                                   color: pnl30d == null ? C.muted : pnl30d >= 0 ? "#4ADE80" : "#FF6450" },
+          { label: "СР. APY",  val: liveAvgApy > 0 ? `${liveAvgApy.toFixed(1)}%` : "—",                                                                        color: "#00E5FF" },
         ].map(({ label, val, color }) => (
           <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
             <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 5 }}>{label}</div>
@@ -1225,7 +1225,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
 const WAY_CATS = [
   { id: "Крипто",       color: "#00E5FF" },
   { id: "Бизнес",       color: "#FFD700" },
-  { id: "Инвестиции",   color: "#76FF03" },
+  { id: "Инвестиции",   color: "#4ADE80" },
   { id: "Инфраструктура", color: "#7C5CFC" },
   { id: "Задача",       color: "#9090B0" },
 ];
@@ -1262,7 +1262,7 @@ function TaskManager({ data, setData }) {
     <div style={{ marginTop: 28 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
         <div className="display" style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Задачи к цели</div>
-        {totalImpact > 0 && <div style={{ fontSize: 12, color: C.muted }}>потенциал: <b style={{ color: "#76FF03" }}>+${totalImpact.toLocaleString()}/мес</b></div>}
+        {totalImpact > 0 && <div style={{ fontSize: 12, color: C.muted }}>потенциал: <b style={{ color: "#4ADE80" }}>+${totalImpact.toLocaleString()}/мес</b></div>}
       </div>
 
       {/* Add task */}
@@ -1277,7 +1277,7 @@ function TaskManager({ data, setData }) {
         {/* Category filter */}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <button onClick={() => setCatFilter("all")} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: catFilter === "all" ? 700 : 400, background: catFilter === "all" ? "#FFD70022" : "transparent", border: `1px solid ${catFilter === "all" ? "#FFD700" : C.border}`, color: catFilter === "all" ? "#FFD700" : C.muted, cursor: "pointer" }}>Все ({tasks.length})</button>
-          <button onClick={() => setSortByImpact(s => !s)} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: sortByImpact ? 700 : 400, background: sortByImpact ? "rgba(118,255,3,0.12)" : "transparent", border: `1px solid ${sortByImpact ? "#76FF03" : C.border}`, color: sortByImpact ? "#76FF03" : C.muted, cursor: "pointer" }}>$ По эффекту</button>
+          <button onClick={() => setSortByImpact(s => !s)} style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: sortByImpact ? 700 : 400, background: sortByImpact ? "rgba(118,255,3,0.12)" : "transparent", border: `1px solid ${sortByImpact ? "#4ADE80" : C.border}`, color: sortByImpact ? "#4ADE80" : C.muted, cursor: "pointer" }}>$ По эффекту</button>
           {WAY_CATS.map(c => {
             const count = tasks.filter(t => t.category === c.id).length;
             if (!count) return null;
@@ -1314,13 +1314,13 @@ function TaskManager({ data, setData }) {
                 {(task.deadline || task.impact > 0) && (
                   <div style={{ fontSize: 11, color: overdue ? "#FF6450" : soon ? "#FFD700" : C.muted, marginTop: 2, display: "flex", gap: 10, flexWrap: "wrap" }}>
                     {task.deadline && <span>{overdue ? "⚠ Просрочено · " : soon ? "⏰ Скоро · " : "📅 "}{task.deadline}</span>}
-                    {task.impact > 0 && <span style={{ color: "#76FF03" }}>+${task.impact.toLocaleString()}/мес</span>}
+                    {task.impact > 0 && <span style={{ color: "#4ADE80" }}>+${task.impact.toLocaleString()}/мес</span>}
                   </div>
                 )}
               </div>
               <input type="number" placeholder="$" value={task.impact ?? ""} title="Эффект $/мес"
                 onChange={e => setData(d => ({ ...d, tasks: d.tasks.map(t => t.id === task.id ? { ...t, impact: e.target.value ? parseFloat(e.target.value) : undefined } : t) }))}
-                style={{ width: 52, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, color: task.impact > 0 ? "#76FF03" : C.muted, fontSize: 10, padding: "3px 5px", outline: "none", flexShrink: 0 }} />
+                style={{ width: 52, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, color: task.impact > 0 ? "#4ADE80" : C.muted, fontSize: 10, padding: "3px 5px", outline: "none", flexShrink: 0 }} />
               <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 10, background: `${catColor}18`, color: catColor, border: `1px solid ${catColor}33`, flexShrink: 0 }}>{task.category}</span>
               <input type="date" value={task.deadline || ""} onChange={e => setData(d => ({ ...d, tasks: d.tasks.map(t => t.id === task.id ? { ...t, deadline: e.target.value || undefined } : t) }))}
                 style={{ background: "transparent", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", outline: "none", flexShrink: 0, width: 20, opacity: 0.5 }} title="Дедлайн" />
@@ -1342,17 +1342,17 @@ function useAccent() {
   if (loc.pathname.startsWith("/defi"))    return "#00E5FF";
   if (loc.pathname.startsWith("/way"))     return "#FFD700";
   if (loc.pathname.startsWith("/wishlist"))return "#7C5CFC";
-  if (loc.pathname.startsWith("/networth"))return "#76FF03";
+  if (loc.pathname.startsWith("/networth"))return "#4ADE80";
   if (loc.pathname.startsWith("/weekly"))  return "#FF9800";
   if (loc.pathname.startsWith("/setup"))   return "#6C63FF";
   return "#00E5FF";
 }
 
 function RadarDashboard({ embedded = false }) {
-  const TAG_COLORS = { x: "#1DA1F2", media: "#7C5CFC", data: "#76FF03" };
+  const TAG_COLORS = { x: "#1DA1F2", media: "#7C5CFC", data: "#4ADE80" };
   const TAG_LABELS = { x: "𝕏 Twitter", media: "Медиа", data: "Данные" };
-  const IMPACT_C   = { high: "#FF6450", medium: "#FFD700", low: "#76FF03" };
-  const RISK_C     = { high: "#FF6450", medium: "#FFD700", low: "#76FF03" };
+  const IMPACT_C   = { high: "#FF6450", medium: "#FFD700", low: "#4ADE80" };
+  const RISK_C     = { high: "#FF6450", medium: "#FFD700", low: "#4ADE80" };
 
   const [news,        setNews]        = useState([]);
   const [newsLoading, setNewsLoading] = useState(false);
@@ -1481,7 +1481,7 @@ function RadarDashboard({ embedded = false }) {
                   <div>
                     <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>Возможности</div>
                     {brief.opportunities.map((item, i) => {
-                      const riskColor = item.risk === "low" ? "#76FF03" : item.risk === "medium" ? "#FFD700" : "#FF6450";
+                      const riskColor = item.risk === "low" ? "#4ADE80" : item.risk === "medium" ? "#FFD700" : "#FF6450";
                       const riskLabel = item.risk === "low" ? "Conservative" : item.risk === "medium" ? "Moderate" : "Aggressive";
                       return (
                         <div key={i} style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 8, borderLeft: `3px solid ${riskColor}` }}>
@@ -1636,15 +1636,15 @@ function NetWorthDashboard({ nwData, setNwData, wayData, setWayData }) {
   const forecastDate = monthsTo1M ? (() => { const d = new Date(); d.setMonth(d.getMonth() + monthsTo1M); return d.toLocaleDateString("ru-RU", { month: "long", year: "numeric" }); })() : null;
 
   const inputStyle = { width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "7px 10px", color: C.text, fontSize: 12, fontFamily: "inherit", boxSizing: "border-box" };
-  const NW_COLOR = "#76FF03";
+  const NW_COLOR = "#4ADE80";
 
   return (
     <div style={{ padding: "24px 20px", maxWidth: 900, margin: "0 auto" }}>
       {/* Missing month banner */}
       {missingCurrent && !showForm && (
         <div style={{ background: "rgba(118,255,3,0.06)", border: "1px solid rgba(118,255,3,0.25)", borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <span style={{ fontSize: 14, color: "#76FF03" }}>📅 Данные за {(() => { const [y,m] = currentMonth.split("-"); return `${["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"][parseInt(m)-1]} ${y}`; })()} ещё не внесены</span>
-          <button onClick={() => setShowForm(true)} style={{ background: "rgba(118,255,3,0.15)", border: "1px solid rgba(118,255,3,0.4)", borderRadius: 6, color: "#76FF03", fontSize: 12, padding: "6px 14px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 14, color: "#4ADE80" }}>📅 Данные за {(() => { const [y,m] = currentMonth.split("-"); return `${["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"][parseInt(m)-1]} ${y}`; })()} ещё не внесены</span>
+          <button onClick={() => setShowForm(true)} style={{ background: "rgba(118,255,3,0.15)", border: "1px solid rgba(118,255,3,0.4)", borderRadius: 6, color: "#4ADE80", fontSize: 12, padding: "6px 14px", cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
             Заполнить →
           </button>
         </div>
@@ -1918,7 +1918,7 @@ function NetWorthDashboard({ nwData, setNwData, wayData, setWayData }) {
 
 const SETUP = {
   projects: [
-    { name: "flow", desc: "Групповая дисциплина · спринты", stack: "TS core + React + Supabase", deploy: "Cloudflare Pages", color: "#76FF03", live: "flowsprints.pages.dev" },
+    { name: "flow", desc: "Групповая дисциплина · спринты", stack: "TS core + React + Supabase", deploy: "Cloudflare Pages", color: "#4ADE80", live: "flowsprints.pages.dev" },
     { name: "master-dashboard", desc: "Этот дашборд · 1M$ · DeFi", stack: "React + Vite + Workers", deploy: "Cloudflare Pages", color: "#00E5FF", live: null },
     { name: "tg-bot", desc: "AI-ассистент в Telegram", stack: "Python · Vertex · DeepSeek", deploy: "Google Cloud Run", color: "#7C5CFC", live: "@dimitriyakclaude_bot" },
   ],
@@ -1965,13 +1965,13 @@ const SETUP_SERVICES = [
 ];
 const SETUP_LINKS = [
   { label: "Бот", href: "https://t.me/dimitriyakclaude_bot", color: "#7C5CFC" },
-  { label: "flow", href: "https://github.com/dimitriyak/flow", color: "#76FF03" },
+  { label: "flow", href: "https://github.com/dimitriyak/flow", color: "#4ADE80" },
   { label: "dashboard", href: "https://github.com/dimitriyak/master-dashboard", color: "#00E5FF" },
   { label: "tg-bot", href: "https://github.com/dimitriyak/tg-bot", color: "#FFD700" },
 ];
 
 function Dot({ ok }) {
-  const color = ok === null ? C.muted : ok ? "#76FF03" : "#FF6450";
+  const color = ok === null ? C.muted : ok ? "#4ADE80" : "#FF6450";
   return <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0, boxShadow: ok ? `0 0 6px ${color}` : "none" }} />;
 }
 
@@ -2043,7 +2043,7 @@ function SetupDashboard() {
       </div>
 
       <div className="setup-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 14 }}>
-        <SetupCard title="Живой статус" accent="#76FF03">
+        <SetupCard title="Живой статус" accent="#4ADE80">
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <Dot ok={status ? status?.bot?.ok : null} />
             <span style={{ fontSize: 14, color: C.text, flex: 1 }}>Telegram-бот</span>
@@ -2052,13 +2052,13 @@ function SetupDashboard() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <Dot ok={status ? status?.deepseek?.ok : null} />
             <span style={{ fontSize: 14, color: C.text, flex: 1 }}>DeepSeek баланс {dsLow && <span title="Низкий баланс — пополни">⚠️</span>}</span>
-            <span style={{ fontSize: 12, color: dsLow ? "#FF6450" : "#76FF03", fontWeight: 600 }}>{status?.deepseek?.balance || "…"}</span>
+            <span style={{ fontSize: 12, color: dsLow ? "#FF6450" : "#4ADE80", fontWeight: 600 }}>{status?.deepseek?.balance || "…"}</span>
           </div>
           {SETUP_SERVICES.map(s => (
             <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <Dot ok={svc[s.name]} />
               <span style={{ fontSize: 14, color: C.text, flex: 1 }}>{s.name}</span>
-              {svcMs[s.name] != null && <span style={{ fontSize: 11, color: svcMs[s.name] < 500 ? "#76FF03" : svcMs[s.name] < 1500 ? "#FFD700" : "#FF6450" }}>{svcMs[s.name]}ms</span>}
+              {svcMs[s.name] != null && <span style={{ fontSize: 11, color: svcMs[s.name] < 500 ? "#4ADE80" : svcMs[s.name] < 1500 ? "#FFD700" : "#FF6450" }}>{svcMs[s.name]}ms</span>}
               <span style={{ fontSize: 11, color: C.muted }}>worker</span>
             </div>
           ))}
@@ -2117,7 +2117,7 @@ function ChangelogCard() {
 }
 
 const AI_PROJECTS = [
-  { repo: "dimitriyak/flow",             label: "flow",             color: "#76FF03", desc: "Спринты · групповая дисциплина" },
+  { repo: "dimitriyak/flow",             label: "flow",             color: "#4ADE80", desc: "Спринты · групповая дисциплина" },
   { repo: "dimitriyak/master-dashboard", label: "master-dashboard", color: "#00E5FF", desc: "Личный дашборд" },
   { repo: "dimitriyak/tg-bot",           label: "tg-bot",           color: "#7C5CFC", desc: "Telegram AI-ассистент" },
 ];
@@ -2255,7 +2255,7 @@ function WeeklyReport({ wishState, defiPositions, defiHw, wayData, nwData }) {
             window.open(url, "_blank");
             setTgSent(true);
             setTimeout(() => setTgSent(false), 3000);
-          }} style={{ background: tgSent ? "rgba(118,255,3,0.1)" : "rgba(124,92,252,0.1)", border: `1px solid ${tgSent ? "rgba(118,255,3,0.3)" : "rgba(124,92,252,0.3)"}`, borderRadius: 8, color: tgSent ? "#76FF03" : "#7C5CFC", fontSize: 12, fontWeight: 600, padding: "8px 16px", cursor: "pointer", transition: "all 0.2s" }}>
+          }} style={{ background: tgSent ? "rgba(118,255,3,0.1)" : "rgba(124,92,252,0.1)", border: `1px solid ${tgSent ? "rgba(118,255,3,0.3)" : "rgba(124,92,252,0.3)"}`, borderRadius: 8, color: tgSent ? "#4ADE80" : "#7C5CFC", fontSize: 12, fontWeight: 600, padding: "8px 16px", cursor: "pointer", transition: "all 0.2s" }}>
             {tgSent ? "✓ Открыт TG" : "↗ Отправить в TG"}
           </button>
         </div>
@@ -2263,9 +2263,9 @@ function WeeklyReport({ wishState, defiPositions, defiHw, wayData, nwData }) {
 
       {/* Networth */}
       {latest && (
-        <Section title="NETWORTH" color="#76FF03">
-          <Row label={`Капитал (${fmtM(latest.month)})`} val={`$${Math.round(latest.nwUsd / 1000)}K`} color="#76FF03" />
-          {nwDelta !== 0 && <Row label="Изменение vs прошлый месяц" val={`${nwDelta > 0 ? "+" : ""}$${Math.round(nwDelta / 1000)}K`} sub={nwPct ? `(${nwPct}%)` : ""} color={nwDelta > 0 ? "#76FF03" : "#FF6450"} />}
+        <Section title="NETWORTH" color="#4ADE80">
+          <Row label={`Капитал (${fmtM(latest.month)})`} val={`$${Math.round(latest.nwUsd / 1000)}K`} color="#4ADE80" />
+          {nwDelta !== 0 && <Row label="Изменение vs прошлый месяц" val={`${nwDelta > 0 ? "+" : ""}$${Math.round(nwDelta / 1000)}K`} sub={nwPct ? `(${nwPct}%)` : ""} color={nwDelta > 0 ? "#4ADE80" : "#FF6450"} />}
           <Row label="Рублей" val={`₽${(latest.nwRub / 1_000_000).toFixed(2)}M`} />
         </Section>
       )}
@@ -2273,11 +2273,11 @@ function WeeklyReport({ wishState, defiPositions, defiHw, wayData, nwData }) {
       {/* DeFi */}
       <Section title="CRYPTO · DEFI" color="#00E5FF">
         <Row label="В работе" val={defiCur > 0 ? `$${defiCur.toLocaleString()}` : "—"} />
-        <Row label="P&L" val={defiPnl !== 0 ? `${defiPnl > 0 ? "+" : ""}$${defiPnl.toFixed(0)}` : "—"} color={defiPnl > 0 ? "#76FF03" : defiPnl < 0 ? "#FF6450" : C.muted} />
+        <Row label="P&L" val={defiPnl !== 0 ? `${defiPnl > 0 ? "+" : ""}$${defiPnl.toFixed(0)}` : "—"} color={defiPnl > 0 ? "#4ADE80" : defiPnl < 0 ? "#FF6450" : C.muted} />
         <Row label="Домашка всего" val={`${defiDone}/${defiTotal}`} sub={`${defiPct}%`} color="#00E5FF" />
         <Bar pct={defiPct} color="#00E5FF" />
         {currentWeek && (
-          <Row label={`Неделя ${currentWeek.week}: ${currentWeek.title}`} val={`${weekDone}/${weekTotal}`} color={weekDone === weekTotal ? "#76FF03" : "#00E5FF"} />
+          <Row label={`Неделя ${currentWeek.week}: ${currentWeek.title}`} val={`${weekDone}/${weekTotal}`} color={weekDone === weekTotal ? "#4ADE80" : "#00E5FF"} />
         )}
       </Section>
 
@@ -2296,7 +2296,7 @@ function WeeklyReport({ wishState, defiPositions, defiHw, wayData, nwData }) {
         {WISH_CATEGORIES.map(cat => {
           const done = cat.items.filter((_, i) => wishState[cat.id]?.[i]?.done).length;
           return done > 0 ? (
-            <Row key={cat.id} label={`${cat.icon} ${cat.title}`} val={`${done}/${cat.items.length}`} color={done === cat.items.length ? "#76FF03" : C.text} />
+            <Row key={cat.id} label={`${cat.icon} ${cat.title}`} val={`${done}/${cat.items.length}`} color={done === cat.items.length ? "#4ADE80" : C.text} />
           ) : null;
         })}
       </Section>
@@ -2350,7 +2350,7 @@ function WeeklyReport({ wishState, defiPositions, defiHw, wayData, nwData }) {
 const navItems = [
   { to: "/defi",      label: "Crypto",    color: "#00E5FF" },
   { to: "/wishlist",  label: "Wishlist",  color: "#7C5CFC" },
-  { to: "/networth",  label: "Networth",  color: "#76FF03" },
+  { to: "/networth",  label: "Networth",  color: "#4ADE80" },
   { to: "/weekly",    label: "Weekly",    color: "#FF9800" },
   { to: "/setup",     label: "Setup",     color: "#6C63FF" },
 ];
