@@ -647,26 +647,26 @@ function DistributionChart({ groups }) {
   const max = Math.max(...bars.map(b => b.current));
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: 16, marginBottom: 16 }}>
-      <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 12 }}>РАСПРЕДЕЛЕНИЕ</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "8px 22px" }}>
+      <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 14 }}>РАСПРЕДЕЛЕНИЕ</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
         {bars.map(g => {
-          const w = Math.max(3, Math.round(g.current / max * 100));
+          const w = Math.max(2, Math.round(g.current / max * 100));
           const url = protocolUrl(g.protocol);
           const Label = url ? "a" : "div";
           return (
-            <div key={g.protocol} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div key={g.protocol} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Label
                 {...(url ? { href: url, target: "_blank", rel: "noopener noreferrer" } : {})}
                 title={url ? `${g.protocol} — открыть дашборд` : g.protocol}
-                style={{ display: "flex", alignItems: "center", gap: 6, width: 116, flexShrink: 0, textDecoration: "none", color: C.text, cursor: url ? "pointer" : "default" }}
+                style={{ display: "flex", alignItems: "center", gap: 7, width: 132, flexShrink: 0, textDecoration: "none", color: C.text, cursor: url ? "pointer" : "default" }}
               >
                 <ProtocolIcon protocol={g.protocol} type={g.items[0].type} color={g.color} />
-                <span style={{ fontSize: 11.5, fontWeight: 500, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.protocol}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.protocol}</span>
               </Label>
-              <div style={{ flex: 1, height: 8, background: "rgba(255,255,255,0.05)", borderRadius: 4, overflow: "hidden" }}>
-                <div style={{ width: `${w}%`, height: "100%", background: "#00E5FF", borderRadius: 4, opacity: 0.85 }} />
+              <div style={{ flex: 1, height: 2, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{ width: `${w}%`, height: "100%", background: g.color, borderRadius: 2 }} />
               </div>
-              <span style={{ width: 52, textAlign: "right", flexShrink: 0, fontSize: 11.5, fontWeight: 600, color: C.muted }}>${g.current.toFixed(0)}</span>
+              <span style={{ width: 58, textAlign: "right", flexShrink: 0, fontSize: 12, fontWeight: 600, color: C.muted }}>${g.current.toFixed(0)}</span>
             </div>
           );
         })}
