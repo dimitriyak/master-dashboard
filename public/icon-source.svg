@@ -1,25 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <radialGradient id="sky" cx="50%" cy="34%" r="80%">
-      <stop offset="0%" stop-color="#15172a"/>
-      <stop offset="55%" stop-color="#0c0d1a"/>
-      <stop offset="100%" stop-color="#050507"/>
+      <stop offset="0%" stop-color="#15172a"/><stop offset="55%" stop-color="#0c0d1a"/><stop offset="100%" stop-color="#050507"/>
     </radialGradient>
     <radialGradient id="nebV" cx="16%" cy="18%" r="46%">
-      <stop offset="0%" stop-color="#6C63FF" stop-opacity="0.24"/>
-      <stop offset="100%" stop-color="#6C63FF" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#6C63FF" stop-opacity="0.24"/><stop offset="100%" stop-color="#6C63FF" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="nebC" cx="84%" cy="84%" r="48%">
-      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.24"/>
-      <stop offset="100%" stop-color="#00E5FF" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#00E5FF" stop-opacity="0.24"/><stop offset="100%" stop-color="#00E5FF" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="dGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#7CF7FF"/>
-      <stop offset="100%" stop-color="#6C63FF"/>
+      <stop offset="0%" stop-color="#7CF7FF"/><stop offset="100%" stop-color="#6C63FF"/>
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#sky)"/>
   <rect width="512" height="512" rx="112" fill="url(#nebV)"/>
   <rect width="512" height="512" rx="112" fill="url(#nebC)"/>
-  <path d="M163.99817471890833 340.3013371648015V257.66140994510135Q163.99817471890833 191.96274710990286 229.69683755410682 191.96274710990286H292.0572155101879V106.0H348.00182528109167V406.0H229.69683755410682Q163.99817471890833 406.0 163.99817471890833 340.3013371648015ZM219.94278448981206 344.3553912188556Q219.94278448981206 357.33588636243667 232.92327963339312 357.33588636243667H292.0572155101879V240.6268607474662H232.92327963339312Q219.94278448981206 240.6268607474662 219.94278448981206 253.6073558910473Z" fill="url(#dGrad)"/>
+  <path d="M184.60658358187288 305.01783763988595V240.88925411739865Q184.60658358187288 189.90709175728463 235.58874594198693 189.90709175728463H283.98039923590585V123.19999999999999H327.3934164181271V356.0H235.58874594198693Q184.60658358187288 356.0 184.60658358187288 305.01783763988595ZM228.01960076409418 308.16378358583194Q228.01960076409418 318.23664781725086 238.0924649955131 318.23664781725086H283.98039923590585V227.67044394003378H238.0924649955131Q228.01960076409418 227.67044394003378 228.01960076409418 237.7433081714527Z" fill="url(#dGrad)"/>
 </svg>
