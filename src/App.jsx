@@ -104,7 +104,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
   const wayNextTask = wayData.tasks.find(t => !t.done);
 
   const cards = [
-    { id: "defi", icon: "₿", label: "CRYPTO", title: "Crypto", subtitle: "Portfolio · Homework · Radar", progress: defiHwPct, stat1: { label: "P&L", val: `${defiPnl >= 0 ? "+" : ""}$${defiPnl.toFixed(0)}` }, stat2: bybitBalance != null ? { label: "Bybit", val: `$${Math.round(bybitBalance).toLocaleString()}` } : { label: "в работе", val: `$${defiCurrent.toLocaleString()}` }, nextTask: defiNextTask || null, color: "#00E5FF" },
+    { id: "defi", icon: "₿", label: "CRYPTO", title: "Crypto", subtitle: "Портфель · P&L · APY", progress: defiHwPct, stat1: { label: "P&L", val: `${defiPnl >= 0 ? "+" : ""}$${defiPnl.toFixed(0)}` }, stat2: bybitBalance != null ? { label: "Bybit", val: `$${Math.round(bybitBalance).toLocaleString()}` } : { label: "в работе", val: `$${defiCurrent.toLocaleString()}` }, nextTask: defiNextTask || null, color: "#00E5FF" },
     { id: "wishes", icon: "✦", label: "ЛИЧНОЕ", title: "Wishlist", subtitle: "Цели · Мечты · Планы", progress: wishPct, stat1: { label: "выполнено", val: `${wishDone}/${wishTotal}` }, stat2: { label: "категорий", val: `${WISH_CATEGORIES.length}` }, nextTask: wishNextTask || null, color: "#7C5CFC" },
   ];
 
@@ -639,6 +639,35 @@ const fmtDate = (d) => { if (!d) return null; const [y, m, day] = d.split("-"); 
 const fmtUsd = (v) => v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${(v ?? 0).toFixed(2)}`;
 const fmtPnl = (v) => `${v >= 0 ? "+" : ""}${Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(0)}$`;
 
+// Distribution as a bar chart: columns = portfolio size per protocol, icons below.
+function DistributionChart({ groups }) {
+  const bars = (groups || []).filter(g => g.current > 0).sort((a, b) => b.current - a.current);
+  if (!bars.length) return null;
+  const max = Math.max(...bars.map(b => b.current));
+  const MAXH = 120;
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: 16, marginBottom: 16 }}>
+      <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 14 }}>РАСПРЕДЕЛЕНИЕ</div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+        {bars.map(g => {
+          const h = Math.max(6, Math.round(g.current / max * MAXH));
+          return (
+            <div key={g.protocol} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", height: MAXH + 22 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.text, marginBottom: 5 }}>${g.current.toFixed(0)}</span>
+                <div style={{ width: "70%", maxWidth: 46, height: h, borderRadius: "6px 6px 2px 2px", background: g.color, opacity: 0.9 }} />
+              </div>
+              <div style={{ marginTop: 8, opacity: 0.95 }}>
+                <ProtocolIcon protocol={g.protocol} type={g.items[0].type} color={g.color} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // One card per protocol; each pool / loan / debt is a row inside.
 function ProtocolCard({ group }) {
   const { protocol, color, status, items, current, pnl, hasPnl, growth, yield_, hasGrowth } = group;
@@ -1062,6 +1091,26 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         </div>
       </div>
 
+      {(bybit || liveTotal > 0) && (
+        <div style={{ padding: "18px 28px", borderBottom: `1px solid ${C.border}`, background: "rgba(255,215,0,0.03)" }}>
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.14em", fontWeight: 600, marginBottom: 5 }}>КРИПТО ИТОГО</div>
+          <div style={{ fontSize: 34, fontWeight: 800, color: "#FFD700", lineHeight: 1 }}>
+            ${((bybit?.totalEquity ?? 0) + liveTotal + rabbyIdle).toFixed(0)}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+            {[
+              bybit ? ["Bybit", bybit.totalEquity] : null,
+              liveTotal > 0 ? ["DeFi", liveTotal] : null,
+              rabbyIdle >= 1 ? ["Rabby", rabbyIdle] : null,
+            ].filter(Boolean).map(([lbl, v]) => (
+              <span key={lbl} style={{ fontSize: 11, color: C.muted, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 10px" }}>
+                {lbl} <b style={{ color: C.text }}>${v.toFixed(0)}</b>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="page-pad-sm" style={{ borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div style={{ width: 5, height: 5, borderRadius: "50%", background: bybit ? "#00E5FF" : bybitLoading ? C.muted : "#FF6450", flexShrink: 0 }} />
@@ -1072,7 +1121,6 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         {bybit && (
           <>
             <span style={{ fontSize: 16, fontWeight: 700, color: "#00E5FF" }}>${bybit.totalEquity.toFixed(2)}</span>
-            {/* Sparkline */}
             {bybitHistory.length >= 2 && (() => {
               const vals = bybitHistory.map(h => h.balance);
               const minV = Math.min(...vals), maxV = Math.max(...vals);
@@ -1108,22 +1156,6 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         )}
       </div>
 
-      {(bybit || liveTotal > 0) && (
-        <div style={{ padding: "10px 28px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 14, background: "rgba(255,215,0,0.03)" }}>
-          <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.12em", fontWeight: 600 }}>КРИПТО ИТОГО</span>
-          <span style={{ fontSize: 20, fontWeight: 700, color: "#FFD700" }}>
-            ${((bybit?.totalEquity ?? 0) + liveTotal + rabbyIdle).toFixed(0)}
-          </span>
-          <span style={{ fontSize: 11, color: C.muted }}>
-            {[
-              bybit ? `Bybit $${bybit.totalEquity.toFixed(0)}` : null,
-              liveTotal > 0 ? `DeFi $${liveTotal.toFixed(0)}` : null,
-              rabbyIdle >= 1 ? `Rabby $${rabbyIdle.toFixed(0)}` : null,
-            ].filter(Boolean).join(" · ")}
-          </span>
-        </div>
-      )}
-
       <div style={{ padding: "14px 28px 6px" }}>
         <span style={{ fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>DeFi</span>
       </div>
@@ -1144,36 +1176,9 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 4, padding: "12px 28px", borderBottom: `1px solid ${C.border}` }}>
-        {[{ id: "portfolio", label: "Portfolio" }, { id: "homework", label: "Homework" }, { id: "notes", label: "Notes" }, { id: "radar", label: "Radar" }].map(t => (
-          <button key={t.id} onClick={() => navigate(`/defi/${t.id}`)} style={{ background: tab === t.id ? "rgba(0,229,255,0.08)" : "transparent", border: "none", borderBottom: tab === t.id ? "2px solid #00E5FF" : "2px solid transparent", color: tab === t.id ? "#00E5FF" : C.muted, fontSize: 14, padding: "8px 18px 10px", cursor: "pointer", borderRadius: 0, transition: "all 0.15s" }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       <div className="page-pad" style={{ maxWidth: 900, margin: "0 auto" }}>
-        {tab === "portfolio" && (
-          <div>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: 16, marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 10 }}>РАСПРЕДЕЛЕНИЕ</div>
-              <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", gap: 1 }}>
-                {livePosData.map(p => {
-                  const val = Math.max(0, p.liveDollarValue ?? p.invested ?? 0);
-                  return val > 0 ? <div key={p.id} style={{ flex: val, background: p.color, opacity: p.type === "debt" ? 0.3 : 0.8 }} /> : null;
-                })}
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 10 }}>
-                {livePosData.filter(p => (p.liveDollarValue ?? p.invested ?? 0) !== 0).map(p => (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: p.color }} />
-                    <span style={{ fontSize: 11, color: C.muted }}>
-                      {p.protocol} {p.liveDollarValue != null ? `$${Math.abs(p.liveDollarValue).toFixed(0)}${p.type === "debt" ? " ↯" : ""}` : "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div>
+            <DistributionChart groups={protocolGroups} />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
               {protocolGroups.map(g => (
                 <ProtocolCard key={g.protocol} group={g} />
@@ -1205,146 +1210,6 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
               </div>
             )}
           </div>
-        )}
-
-        {tab === "homework" && hwDone === defiTotal && !courseExpanded && (
-          <div style={{ background: "rgba(118,255,3,0.06)", border: "1px solid rgba(118,255,3,0.25)", borderRadius: 16, boxShadow: CARD_SHADOW, padding: "20px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <span style={{ fontSize: 28 }}>🎓</span>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#76FF03" }}>Курс пройден — {defiTotal}/{defiTotal}</div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>8 недель DeFi-обучения завершены. База есть — дальше практика.</div>
-              </div>
-            </div>
-            <button onClick={() => setCourseExpanded(true)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, padding: "7px 14px", cursor: "pointer" }}>
-              Показать программу
-            </button>
-          </div>
-        )}
-        {tab === "homework" && (hwDone < defiTotal || courseExpanded) && (
-          <div>
-            {/* Streak counter */}
-            {(() => {
-              let streak = 0;
-              for (let i = DEFI_WEEKS.length - 1; i >= 0; i--) {
-                const w = DEFI_WEEKS[i];
-                const allDone = w.tasks.every((_, j) => hwChecked[`${w.week}-${j}`]);
-                if (allDone) streak++;
-                else break;
-              }
-              const completedWeeks = DEFI_WEEKS.filter(w => w.tasks.every((_, j) => hwChecked[`${w.week}-${j}`])).length;
-              return (
-                <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-                  {completedWeeks > 0 && (
-                    <div style={{ background: "rgba(118,255,3,0.07)", border: "1px solid rgba(118,255,3,0.2)", borderRadius: 10, padding: "8px 14px", display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 16 }}>🔥</span>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#76FF03" }}>{streak > 0 ? `${streak} подряд` : `${completedWeeks} нед`}</div>
-                        <div style={{ fontSize: 10, color: C.muted }}>{streak > 0 ? "страйк недель" : "завершено"}</div>
-                      </div>
-                    </div>
-                  )}
-                  <div style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em" }}>ОБЩИЙ ПРОГРЕСС</span>
-                    <span style={{ fontSize: 10, color: "#76FF03", fontFamily: "monospace" }}>{hwDone}/{defiTotal}</span>
-                  </div>
-                </div>
-              );
-            })()}
-            <div style={{ height: 4, background: C.border, borderRadius: 2, overflow: "hidden", marginBottom: 20 }}>
-              <div style={{ height: "100%", width: `${Math.round((hwDone / defiTotal) * 100)}%`, background: "linear-gradient(90deg, #00E5FF, #76FF03)", borderRadius: 2, transition: "width 0.4s" }} />
-            </div>
-            {DEFI_WEEKS.map(w => {
-              const done = w.tasks.filter((_, i) => hwChecked[`${w.week}-${i}`]).length;
-              const isOpen = openWeek === w.week;
-              return (
-                <div key={w.week} style={{ marginBottom: 6, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
-                  <button onClick={() => setOpenWeek(isOpen ? null : w.week)} style={{ width: "100%", background: isOpen ? "rgba(0,229,255,0.05)" : C.card, border: "none", padding: "11px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "monospace", fontSize: 11, color: "#00E5FF" }}>W{w.week}</span>
-                      <span style={{ color: C.text, fontSize: 14 }}>{w.title}</span>
-                    </div>
-                    <span style={{ fontFamily: "monospace", fontSize: 11, color: done === w.tasks.length ? "#76FF03" : C.muted }}>{done}/{w.tasks.length}</span>
-                  </button>
-                  {isOpen && (
-                    <div style={{ padding: "8px 16px 12px" }}>
-                      {w.tasks.map((task, i) => {
-                        const key = `${w.week}-${i}`;
-                        const isDone = hwChecked[key];
-                        const taskText = typeof task === "string" ? task : task.text;
-                        const taskDesc = typeof task === "object" ? task.description : null;
-                        return (
-                          <TaskRow key={i} taskText={taskText} taskDesc={taskDesc} isDone={isDone} onToggle={() => toggleHw(key)} isLast={i === w.tasks.length - 1} />
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {tab === "notes" && (() => {
-          const NOTE_TAGS = [
-            { id: "general", label: "Общее", color: "#00E5FF" },
-            { id: "apy", label: "APY / ставки", color: "#76FF03" },
-            { id: "protocol", label: "Протокол", color: "#7C5CFC" },
-            { id: "risk", label: "Риск", color: "#FF6450" },
-            { id: "idea", label: "Идея", color: "#FFD700" },
-          ];
-          const tagColor = (id) => NOTE_TAGS.find(t => t.id === id)?.color || "#00E5FF";
-          return (
-            <div>
-              {/* Инпут */}
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: 16, marginBottom: 20 }}>
-                <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 10 }}>НОВАЯ ЗАМЕТКА</div>
-                <textarea
-                  value={noteInput}
-                  onChange={e => setNoteInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveNote(); }}
-                  placeholder="Запиши APY, наблюдение, идею или ссылку... (Cmd+Enter чтобы сохранить)"
-                  rows={3}
-                  style={{ width: "100%", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", color: C.text, fontSize: 12, lineHeight: 1.6, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
-                />
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                  {NOTE_TAGS.map(t => (
-                    <button key={t.id} onClick={() => setNoteTag(t.id)} style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, cursor: "pointer", fontWeight: 600, background: noteTag === t.id ? t.color + "22" : "transparent", border: `1px solid ${noteTag === t.id ? t.color : C.border}`, color: noteTag === t.id ? t.color : C.muted, transition: "all 0.15s" }}>
-                      {t.label}
-                    </button>
-                  ))}
-                  <button onClick={saveNote} style={{ marginLeft: "auto", padding: "5px 16px", borderRadius: 8, background: "rgba(0,229,255,0.1)", border: "1px solid rgba(0,229,255,0.3)", color: "#00E5FF", fontSize: 11, fontWeight: 700, cursor: "pointer", letterSpacing: "0.05em" }}>
-                    + Сохранить
-                  </button>
-                </div>
-              </div>
-
-              {/* Список */}
-              {notes.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 12 }}>Заметок пока нет — сохрани первую выше</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {notes.map(note => (
-                    <div key={note.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", display: "flex", gap: 12, alignItems: "flex-start" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: tagColor(note.tag) + "18", color: tagColor(note.tag), border: `1px solid ${tagColor(note.tag)}30` }}>
-                            {NOTE_TAGS.find(t => t.id === note.tag)?.label || note.tag}
-                          </span>
-                          <span style={{ fontSize: 10, color: C.muted }}>{note.date}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: C.text, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{note.text}</div>
-                      </div>
-                      <button onClick={() => deleteNote(note.id)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1, flexShrink: 0 }} title="Удалить">×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {tab === "radar" && <RadarDashboard embedded />}
       </div>
     </div>
   );
