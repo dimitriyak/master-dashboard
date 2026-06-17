@@ -191,6 +191,18 @@ export const protocolIcon = (protocol) => {
   return domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
 };
 
+// Protocol → dashboard/portfolio page (opened in a new tab from the distribution chart).
+export const PROTOCOL_URLS = {
+  "aave":        "https://app.aave.com",
+  "morpho":      "https://app.morpho.org",
+  "aerodrome":   "https://aerodrome.finance/dashboard",
+  "hyperliquid": "https://app.hyperliquid.xyz/portfolio",
+  "lighter":     "https://app.lighter.xyz/portfolio",
+  "loopscale":   "https://app.loopscale.com/portfolio",
+  "kodiak":      "https://app.kodiak.finance/portfolio",
+};
+export const protocolUrl = (protocol) => PROTOCOL_URLS[(protocol || "").toLowerCase().split(" ")[0]] || null;
+
 export const C = {
   bg: "#080810", surface: "#0E0E1A", card: "#12121F", border: "#1E1E30",
   text: "#E8E8F4", muted: "#5A5A7A", accent: "#6C63FF",

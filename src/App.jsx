@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom'
 import {
   STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL, NW_INITIAL,
-  DEFI_WEEKS, TYPE_ICONS, protocolIcon, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, pill,
+  DEFI_WEEKS, TYPE_ICONS, protocolIcon, protocolUrl, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, pill,
   SYNC_URL, SYNC_TOKEN, AI_STATS_URL, DEFI_PORTFOLIO_URL,
 } from './constants'
 
@@ -639,27 +639,34 @@ const fmtDate = (d) => { if (!d) return null; const [y, m, day] = d.split("-"); 
 const fmtUsd = (v) => v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${(v ?? 0).toFixed(2)}`;
 const fmtPnl = (v) => `${v >= 0 ? "+" : ""}${Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(0)}$`;
 
-// Distribution as a bar chart: columns = portfolio size per protocol, icons below.
+// Distribution as a horizontal bar chart: row per protocol — clickable icon+name → dashboard,
+// proportional bar, value. Sorted by portfolio size.
 function DistributionChart({ groups }) {
   const bars = (groups || []).filter(g => g.current > 0).sort((a, b) => b.current - a.current);
   if (!bars.length) return null;
   const max = Math.max(...bars.map(b => b.current));
-  const MAXH = 120;
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: 16, marginBottom: 16 }}>
       <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 14 }}>РАСПРЕДЕЛЕНИЕ</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
         {bars.map(g => {
-          const h = Math.max(6, Math.round(g.current / max * MAXH));
+          const w = Math.max(2, Math.round(g.current / max * 100));
+          const url = protocolUrl(g.protocol);
+          const Label = url ? "a" : "div";
           return (
-            <div key={g.protocol} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
-              <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", height: MAXH + 22 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.text, marginBottom: 5 }}>${g.current.toFixed(0)}</span>
-                <div style={{ width: "70%", maxWidth: 46, height: h, borderRadius: "6px 6px 2px 2px", background: g.color, opacity: 0.9 }} />
-              </div>
-              <div style={{ marginTop: 8, opacity: 0.95 }}>
+            <div key={g.protocol} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Label
+                {...(url ? { href: url, target: "_blank", rel: "noopener noreferrer" } : {})}
+                title={url ? `${g.protocol} — открыть дашборд` : g.protocol}
+                style={{ display: "flex", alignItems: "center", gap: 7, width: 132, flexShrink: 0, textDecoration: "none", color: C.text, cursor: url ? "pointer" : "default" }}
+              >
                 <ProtocolIcon protocol={g.protocol} type={g.items[0].type} color={g.color} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.protocol}</span>
+              </Label>
+              <div style={{ flex: 1, height: 10, background: "rgba(255,255,255,0.05)", borderRadius: 5, overflow: "hidden" }}>
+                <div style={{ width: `${w}%`, height: "100%", background: g.color, borderRadius: 5, opacity: 0.9 }} />
               </div>
+              <span style={{ width: 60, textAlign: "right", flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.text }}>${g.current.toFixed(0)}</span>
             </div>
           );
         })}
