@@ -647,26 +647,26 @@ function DistributionChart({ groups }) {
   const max = Math.max(...bars.map(b => b.current));
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: 16, marginBottom: 16 }}>
-      <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 14 }}>РАСПРЕДЕЛЕНИЕ</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+      <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 12 }}>РАСПРЕДЕЛЕНИЕ</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "8px 22px" }}>
         {bars.map(g => {
-          const w = Math.max(2, Math.round(g.current / max * 100));
+          const w = Math.max(3, Math.round(g.current / max * 100));
           const url = protocolUrl(g.protocol);
           const Label = url ? "a" : "div";
           return (
-            <div key={g.protocol} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div key={g.protocol} style={{ display: "flex", alignItems: "center", gap: 9 }}>
               <Label
                 {...(url ? { href: url, target: "_blank", rel: "noopener noreferrer" } : {})}
                 title={url ? `${g.protocol} — открыть дашборд` : g.protocol}
-                style={{ display: "flex", alignItems: "center", gap: 7, width: 132, flexShrink: 0, textDecoration: "none", color: C.text, cursor: url ? "pointer" : "default" }}
+                style={{ display: "flex", alignItems: "center", gap: 6, width: 116, flexShrink: 0, textDecoration: "none", color: C.text, cursor: url ? "pointer" : "default" }}
               >
                 <ProtocolIcon protocol={g.protocol} type={g.items[0].type} color={g.color} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.protocol}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 500, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.protocol}</span>
               </Label>
-              <div style={{ flex: 1, height: 10, background: "rgba(255,255,255,0.05)", borderRadius: 5, overflow: "hidden" }}>
-                <div style={{ width: `${w}%`, height: "100%", background: g.color, borderRadius: 5, opacity: 0.9 }} />
+              <div style={{ flex: 1, height: 8, background: "rgba(255,255,255,0.05)", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${w}%`, height: "100%", background: "#00E5FF", borderRadius: 4, opacity: 0.85 }} />
               </div>
-              <span style={{ width: 60, textAlign: "right", flexShrink: 0, fontSize: 12, fontWeight: 700, color: C.text }}>${g.current.toFixed(0)}</span>
+              <span style={{ width: 52, textAlign: "right", flexShrink: 0, fontSize: 11.5, fontWeight: 600, color: C.muted }}>${g.current.toFixed(0)}</span>
             </div>
           );
         })}
@@ -1099,75 +1099,80 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
       </div>
 
       {(bybit || liveTotal > 0) && (
-        <div style={{ padding: "18px 28px", borderBottom: `1px solid ${C.border}`, background: "rgba(255,215,0,0.03)" }}>
-          <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.14em", fontWeight: 600, marginBottom: 5 }}>КРИПТО ИТОГО</div>
-          <div style={{ fontSize: 34, fontWeight: 800, color: "#FFD700", lineHeight: 1 }}>
-            ${((bybit?.totalEquity ?? 0) + liveTotal + rabbyIdle).toFixed(0)}
+        <div className="page-pad-sm" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 10 }}>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.14em", fontWeight: 600 }}>КРИПТО ИТОГО</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#FFD700", lineHeight: 1.1, marginTop: 4 }}>
+              ${((bybit?.totalEquity ?? 0) + liveTotal + rabbyIdle).toFixed(0)}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+              {[
+                bybit ? ["Bybit", bybit.totalEquity] : null,
+                liveTotal > 0 ? ["DeFi", liveTotal] : null,
+                rabbyIdle >= 1 ? ["Rabby", rabbyIdle] : null,
+              ].filter(Boolean).map(([lbl, v]) => (
+                <span key={lbl} style={{ fontSize: 11, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 9px" }}>
+                  {lbl} <b style={{ color: C.text }}>${v.toFixed(0)}</b>
+                </span>
+              ))}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-            {[
-              bybit ? ["Bybit", bybit.totalEquity] : null,
-              liveTotal > 0 ? ["DeFi", liveTotal] : null,
-              rabbyIdle >= 1 ? ["Rabby", rabbyIdle] : null,
-            ].filter(Boolean).map(([lbl, v]) => (
-              <span key={lbl} style={{ fontSize: 11, color: C.muted, background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 10px" }}>
-                {lbl} <b style={{ color: C.text }}>${v.toFixed(0)}</b>
-              </span>
-            ))}
+
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 5, height: 5, borderRadius: "50%", background: bybit ? "#00E5FF" : bybitLoading ? C.muted : "#FF6450" }} />
+                <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.14em", fontWeight: 600 }}>BYBIT</span>
+              </div>
+              <button onClick={fetchBybit} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 8px", color: C.muted, fontSize: 11, cursor: "pointer" }}>↻</button>
+            </div>
+            {bybitLoading && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>загружаю...</div>}
+            {bybitError && <div style={{ fontSize: 12, color: "#FF6450", marginTop: 6 }}>Ошибка: {bybitError}</div>}
+            {bybit && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: "#00E5FF", lineHeight: 1.1 }}>${bybit.totalEquity.toFixed(2)}</span>
+                  {bybitHistory.length >= 2 && (() => {
+                    const vals = bybitHistory.map(h => h.balance);
+                    const minV = Math.min(...vals), maxV = Math.max(...vals);
+                    const W = 70, H = 22;
+                    const pts = vals.map((v, i) => {
+                      const x = (i / (vals.length - 1)) * W;
+                      const y = H - ((v - minV) / (maxV - minV || 1)) * (H - 4) - 2;
+                      return `${x},${y}`;
+                    }).join(" ");
+                    const delta = vals[vals.length-1] - vals[vals.length-2];
+                    return (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <svg width={W} height={H} style={{ overflow: "visible" }}>
+                          <polyline points={pts} fill="none" stroke="#00E5FF" strokeWidth="1.5" strokeLinejoin="round" opacity="0.7" />
+                          <circle cx={parseFloat(pts.split(" ").pop().split(",")[0])} cy={parseFloat(pts.split(" ").pop().split(",")[1])} r="2.5" fill="#00E5FF" />
+                        </svg>
+                        <span style={{ fontSize: 11, color: delta >= 0 ? "#4ADE80" : "#FF6450" }}>
+                          {delta >= 0 ? "+" : ""}{delta.toFixed(0)}$
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                  {bybit.coins.map(c => (
+                    <span key={c.coin} style={{ fontSize: 11, color: C.muted, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 9px" }}>
+                      <b style={{ color: "#00E5FF" }}>{c.coin}</b> ${parseFloat(c.usdValue).toFixed(0)}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
-
-      <div className="page-pad-sm" style={{ borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 5, height: 5, borderRadius: "50%", background: bybit ? "#00E5FF" : bybitLoading ? C.muted : "#FF6450", flexShrink: 0 }} />
-          <span style={{ fontSize: 12, color: C.muted }}>Bybit</span>
-        </div>
-        {bybitLoading && <span style={{ fontSize: 12, color: C.muted }}>загружаю...</span>}
-        {bybitError && <span style={{ fontSize: 12, color: "#FF6450" }}>Ошибка: {bybitError}</span>}
-        {bybit && (
-          <>
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#00E5FF" }}>${bybit.totalEquity.toFixed(2)}</span>
-            {bybitHistory.length >= 2 && (() => {
-              const vals = bybitHistory.map(h => h.balance);
-              const minV = Math.min(...vals), maxV = Math.max(...vals);
-              const W = 80, H = 24;
-              const pts = vals.map((v, i) => {
-                const x = (i / (vals.length - 1)) * W;
-                const y = H - ((v - minV) / (maxV - minV || 1)) * (H - 4) - 2;
-                return `${x},${y}`;
-              }).join(" ");
-              const delta = vals[vals.length-1] - vals[vals.length-2];
-              return (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <svg width={W} height={H} style={{ overflow: "visible" }}>
-                    <polyline points={pts} fill="none" stroke="#00E5FF" strokeWidth="1.5" strokeLinejoin="round" opacity="0.7" />
-                    <circle cx={parseFloat(pts.split(" ").pop().split(",")[0])} cy={parseFloat(pts.split(" ").pop().split(",")[1])} r="2.5" fill="#00E5FF" />
-                  </svg>
-                  <span style={{ fontSize: 11, color: delta >= 0 ? "#4ADE80" : "#FF6450" }}>
-                    {delta >= 0 ? "+" : ""}{delta.toFixed(0)}$
-                  </span>
-                </div>
-              );
-            })()}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {bybit.coins.map(c => (
-                <div key={c.coin} style={{ background: "rgba(0,229,255,0.06)", border: `1px solid ${C.border}`, borderRadius: 6, padding: "2px 10px", display: "flex", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: "#00E5FF", fontWeight: 600 }}>{c.coin}</span>
-                  <span style={{ fontSize: 12, color: C.muted }}>${parseFloat(c.usdValue).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-            <button onClick={fetchBybit} style={{ marginLeft: "auto", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 10px", color: C.muted, fontSize: 12, cursor: "pointer" }}>↻</button>
-          </>
-        )}
-      </div>
 
       <div style={{ padding: "14px 28px 6px" }}>
         <span style={{ fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>DeFi</span>
       </div>
 
-      <div className="page-pad-sm" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 10, borderBottom: `1px solid ${C.border}` }}>
+      <div className="page-pad-sm" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 10, borderBottom: `1px solid ${C.border}` }}>
         {[
           { label: "ПОРТФЕЛЬ", val: liveTotal > 0 ? `$${liveTotal.toFixed(0)}` : "—",                                                                          color: C.text },
           { label: "ВЛОЖЕНО",  val: liveInvested > 0 ? `$${liveInvested.toFixed(0)}` : "—",                                                                    color: C.text },
@@ -1176,7 +1181,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
           { label: "30Д",      val: pnl30d != null ? `${pnl30d >= 0 ? "+" : ""}$${pnl30d.toFixed(0)}` : "—",                                                   color: pnl30d == null ? C.muted : pnl30d >= 0 ? "#4ADE80" : "#FF6450" },
           { label: "СР. APY",  val: liveAvgApy > 0 ? `${liveAvgApy.toFixed(1)}%` : "—",                                                                        color: "#00E5FF" },
         ].map(({ label, val, color }) => (
-          <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px" }}>
+          <div key={label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px" }}>
             <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.15em", marginBottom: 5 }}>{label}</div>
             <div style={{ fontSize: 17, fontWeight: 700, color }}>{val}</div>
           </div>
