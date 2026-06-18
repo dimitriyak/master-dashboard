@@ -41,19 +41,32 @@ async function getPortfolio(env) {
   return d && Array.isArray(d.positions) ? d : null;
 }
 
-async function getBybitEquity(env) {
+// Tokens Bybit doesn't price (returns $0) — value them via DeFiLlama (key = coingecko id).
+const PRICE_FIX = { GRAM: "coingecko:the-open-network" };
+
+// Bybit: total equity (corrected for unpriced tokens) + per-coin map {coin:{amt,usd}}.
+async function getBybit(env) {
   const d = await env.BYBIT.fetch("https://bybit-proxy/").then(r => r.json()).catch(() => null);
   const acc = d?.result?.list?.[0];
   if (!acc?.totalEquity) return null;
-  let eq = Number(acc.totalEquity) || 0;
-  // GRAM (ex-Toncoin) не оценивается Bybit — добавляем рыночную стоимость.
-  const gram = (acc.coin || []).find(c => c.coin === "GRAM" && (parseFloat(c.usdValue) || 0) < 0.5 && parseFloat(c.walletBalance) > 0);
-  if (gram) {
-    const pr = await tfetch("https://coins.llama.fi/prices/current/coingecko:the-open-network").then(r => r.json()).catch(() => null);
-    const p = pr?.coins?.["coingecko:the-open-network"]?.price;
-    if (p > 0) eq += parseFloat(gram.walletBalance) * p;
+  let equity = Number(acc.totalEquity) || 0;
+  const coins = {};
+  for (const c of (acc.coin || [])) {
+    let usd = parseFloat(c.usdValue) || 0;
+    const amt = parseFloat(c.walletBalance) || 0;
+    if (usd < 0.5 && amt > 0 && PRICE_FIX[c.coin]) {
+      const pr = await tfetch(`https://coins.llama.fi/prices/current/${PRICE_FIX[c.coin]}`).then(r => r.json()).catch(() => null);
+      const p = pr?.coins?.[PRICE_FIX[c.coin]]?.price;
+      if (p > 0) { equity += amt * p - usd; usd = amt * p; }
+    }
+    if (usd >= 1) coins[c.coin] = { amt, usd };
   }
-  return eq;
+  return { equity, coins };
+}
+
+async function getBybitEquity(env) {
+  const b = await getBybit(env);
+  return b ? b.equity : null;
 }
 
 async function sendTelegram(env, html) {
@@ -85,7 +98,9 @@ async function runAlerts(env) {
   const data = await getPortfolio(env);
   if (!data) return { ok: false, error: "no portfolio data" };
   const day = today();
+  const bybit = await getBybit(env);
   const cur = snapshot(data);
+  cur.bybit = bybit?.coins || {};
 
   let baseline = await env.STATE.get(`baseline:${day}`, "json");
   if (!baseline) {
@@ -139,6 +154,19 @@ async function runAlerts(env) {
   const px = await tfetch(`https://coins.llama.fi/prices/current/${USDC_ETH}`).then(r => r.json()).catch(() => null);
   const usdc = px?.coins?.[USDC_ETH]?.price;
   if (usdc != null && usdc < STABLE_DEPEG) add(`depeg-usdc`, `🚨 <b>USDC депег</b>\nЦена $${usdc.toFixed(4)} — ниже $${STABLE_DEPEG}.`);
+
+  // 5) Bybit монеты: пропала / новая / просадка vs дневной baseline
+  const fmtAmt = n => Number(n) >= 1 ? Number(n).toFixed(2) : Number(n).toFixed(6);
+  const bbBase = baseline.bybit, bbCur = cur.bybit || {};
+  if (bbBase) for (const [coin, b] of Object.entries(bbBase)) {
+    const c = bbCur[coin];
+    if (!c) add(`bb-gone-${coin}`, `🔻 <b>Bybit: ${coin} пропал</b>\nБыло ${fmtAmt(b.amt)} (~$${b.usd.toFixed(0)}). Продано / конвертировано / выведено.`);
+    else if (b.usd > 50 && b.amt > 0 && (b.amt - c.amt) / b.amt >= 0.25)
+      add(`bb-drop-${coin}`, `📉 <b>Bybit: ${coin} уменьшился</b>\n${fmtAmt(b.amt)} → ${fmtAmt(c.amt)} (~-$${(b.usd - c.usd).toFixed(0)}).`);
+  }
+  if (bbBase) for (const coin of Object.keys(bbCur)) {
+    if (!bbBase[coin]) add(`bb-new-${coin}`, `🆕 <b>Bybit: новая монета ${coin}</b>\n${fmtAmt(bbCur[coin].amt)} (~$${bbCur[coin].usd.toFixed(0)})`);
+  }
 
   // Persist "last seen" + dedupe set
   await env.STATE.put(`last`, JSON.stringify(cur));
