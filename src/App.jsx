@@ -679,6 +679,8 @@ function DistributionChart({ groups }) {
 function ProtocolCard({ group }) {
   const { protocol, color, status, items, current, pnl, hasPnl, growth, yield_, hasGrowth } = group;
   const pnlColor = (v) => v >= 0 ? "#4ADE80" : "#FF6450";
+  const url = protocolUrl(protocol);
+  const NameTag = url ? "a" : "div";
   const statusColors = { active: "#4ADE80", pending: "rgba(255,255,255,0.2)", paused: "#FFD700" };
 
   const rows = [];
@@ -699,8 +701,14 @@ function ProtocolCard({ group }) {
       <div style={{ position: "absolute", top: 0, right: 0, width: 60, height: 60, background: `radial-gradient(circle, ${color}15 0%, transparent 70%)`, pointerEvents: "none" }} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <ProtocolIcon protocol={protocol} type={items[0].type} color={color} />
-          <span style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{protocol}</span>
+          <NameTag
+            {...(url ? { href: url, target: "_blank", rel: "noopener noreferrer" } : {})}
+            title={url ? `${protocol} — открыть дашборд` : protocol}
+            style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: "none", color: "#fff", cursor: url ? "pointer" : "default" }}
+          >
+            <ProtocolIcon protocol={protocol} type={items[0].type} color={color} />
+            <span style={{ color: "#fff", fontWeight: 600, fontSize: 14 }}>{protocol}</span>
+          </NameTag>
           <div style={{ width: 5, height: 5, borderRadius: "50%", background: statusColors[status] }} />
         </div>
         <div style={{ textAlign: "right" }}>
