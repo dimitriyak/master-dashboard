@@ -933,10 +933,24 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
       const data = await res.json();
       if (data.retCode === 0) {
         const account = data.result.list[0];
+        // Bybit не оценивает некоторые токены (напр. GRAM = ex-Toncoin) — подставляем рыночную цену.
+        const PRICE_FIX = { GRAM: "coingecko:the-open-network" };
+        let extra = 0;
+        await Promise.all(account.coin.map(async c => {
+          const usd = parseFloat(c.usdValue) || 0;
+          const bal = parseFloat(c.walletBalance) || 0;
+          if (usd < 0.5 && bal > 0 && PRICE_FIX[c.coin]) {
+            try {
+              const pr = await fetch(`https://coins.llama.fi/prices/current/${PRICE_FIX[c.coin]}`).then(r => r.json());
+              const p = pr?.coins?.[PRICE_FIX[c.coin]]?.price;
+              if (p > 0) { const real = bal * p; extra += real - usd; c.usdValue = String(real); }
+            } catch (_) {}
+          }
+        }));
         const coins = account.coin
           .filter(c => parseFloat(c.usdValue) >= 1)
           .sort((a, b) => parseFloat(b.usdValue) - parseFloat(a.usdValue));
-        const equity = parseFloat(account.totalEquity);
+        const equity = parseFloat(account.totalEquity) + extra;
         setBybit({ totalEquity: equity, coins });
         // Сохраняем снапшот (один в день)
         const today = new Date().toISOString().slice(0, 10);

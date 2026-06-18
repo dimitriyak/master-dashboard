@@ -43,8 +43,17 @@ async function getPortfolio(env) {
 
 async function getBybitEquity(env) {
   const d = await env.BYBIT.fetch("https://bybit-proxy/").then(r => r.json()).catch(() => null);
-  const eq = d?.result?.list?.[0]?.totalEquity;
-  return eq != null ? Number(eq) : null;
+  const acc = d?.result?.list?.[0];
+  if (!acc?.totalEquity) return null;
+  let eq = Number(acc.totalEquity) || 0;
+  // GRAM (ex-Toncoin) не оценивается Bybit — добавляем рыночную стоимость.
+  const gram = (acc.coin || []).find(c => c.coin === "GRAM" && (parseFloat(c.usdValue) || 0) < 0.5 && parseFloat(c.walletBalance) > 0);
+  if (gram) {
+    const pr = await tfetch("https://coins.llama.fi/prices/current/coingecko:the-open-network").then(r => r.json()).catch(() => null);
+    const p = pr?.coins?.["coingecko:the-open-network"]?.price;
+    if (p > 0) eq += parseFloat(gram.walletBalance) * p;
+  }
+  return eq;
 }
 
 async function sendTelegram(env, html) {
