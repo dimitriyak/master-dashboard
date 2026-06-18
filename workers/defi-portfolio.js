@@ -588,21 +588,27 @@ async function solRpc(method, params) {
 }
 
 // Loopscale Earn position (OnRe Growth) valued on-chain via vault share price.
+// Resilient: caches last good value and returns it if the Solana RPC is slow/unavailable,
+// so the row never silently disappears on a transient hiccup.
 async function fetchLoopscaleEarn() {
+  const cache = caches.default;
+  const LAST = "https://loopscale.internal/onre-earn-last";
+  const lastGood = async () => { const c = await cache.match(LAST); return c ? c.json().catch(() => null) : null; };
+
   const [bal, vault] = await Promise.all([
     solRpc("getTokenAccountBalance", [ONRE_EARN_ATA]),
     solRpc("getAccountInfo", [ONRE_EARN_VAULT, { encoding: "base64" }]),
   ]);
   const shares = Number(bal?.value?.amount || 0);
-  if (!shares || !vault?.value?.data?.[0]) return null;
+  if (!shares || !vault?.value?.data?.[0]) return await lastGood();
   const buf = Uint8Array.from(atob(vault.value.data[0]), c => c.charCodeAt(0));
   const u64 = (off) => { const dv = new DataView(buf.buffer); return Number(dv.getBigUint64(off, true)); };
   const assets = u64(ONRE_VAULT_ASSETS_OFFSET);
   const vShares = u64(ONRE_VAULT_SHARES_OFFSET);
-  if (!vShares) return null;
+  if (!vShares) return await lastGood();
   const price = assets / vShares;                 // USD per share (grows with yield)
   const usd = round(shares * price / 1e6);
-  if (usd <= 0) return null;
+  if (usd <= 0) return await lastGood();
 
   // Realized APY = annualized growth of the vault share price.
   // Baseline persisted in CF cache; seeded from the deposit point for an immediate figure.
@@ -626,7 +632,9 @@ async function fetchLoopscaleEarn() {
     }
   } catch (_) {}
 
-  return { label: "OnRe Growth", usd, apy };
+  const result = { label: "OnRe Growth", usd, apy };
+  await cache.put(LAST, new Response(JSON.stringify(result), { headers: { "Cache-Control": "max-age=604800" } }));
+  return result;
 }
 
 async function fetchLoopscale() {
