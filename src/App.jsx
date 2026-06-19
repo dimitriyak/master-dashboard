@@ -2094,9 +2094,63 @@ function SetupDashboard() {
           </div>
         </SetupCard>
 
+        <ResourcesCard dsBalance={status?.deepseek?.balance} />
+
         <ChangelogCard />
       </div>
     </div>
+  );
+}
+
+function ResourcesCard({ dsBalance }) {
+  const [ai, setAi] = useState(null);
+  const [capital, setCapital] = useState(null);
+  useEffect(() => {
+    fetch(`${AI_STATS_URL}/stats`).then(r => r.json()).then(setAi).catch(() => {});
+    // капитал в работе = DeFi + Bybit (с GRAM-фиксом)
+    (async () => {
+      try {
+        const [d, b] = await Promise.all([
+          fetch(DEFI_PORTFOLIO_URL).then(r => r.json()).catch(() => null),
+          fetch(BYBIT_PROXY_URL).then(r => r.json()).catch(() => null),
+        ]);
+        const defi = (d?.positions || []).reduce((s, p) => s + (p.usdValue ?? (p.type !== "lp" ? p.balance : 0) ?? 0), 0);
+        let bybit = 0;
+        const acc = b?.result?.list?.[0];
+        if (acc) {
+          bybit = Number(acc.totalEquity) || 0;
+          const gram = (acc.coin || []).find(c => c.coin === "GRAM" && (parseFloat(c.usdValue) || 0) < 0.5 && parseFloat(c.walletBalance) > 0);
+          if (gram) {
+            const pr = await fetch("https://coins.llama.fi/prices/current/coingecko:the-open-network").then(r => r.json()).catch(() => null);
+            const p = pr?.coins?.["coingecko:the-open-network"]?.price;
+            if (p > 0) bybit += parseFloat(gram.walletBalance) * p;
+          }
+        }
+        setCapital({ defi, bybit, total: defi + bybit });
+      } catch (_) {}
+    })();
+  }, []);
+
+  const fmtTok = n => n == null ? "—" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
+  const cost = ai?.total ? (ai.total * 0.00000025) : 0; // грубая оценка ~$0.25/1M
+  const Row = ({ label, value, sub, color }) => (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 11, gap: 8 }}>
+      <span style={{ fontSize: 13, color: C.muted }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, color: color || C.text, textAlign: "right" }}>{value}{sub && <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> {sub}</span>}</span>
+    </div>
+  );
+
+  return (
+    <SetupCard title="Ресурсы стека" accent="#00E5FF">
+      <Row label="AI токены · всего" value={fmtTok(ai?.total)} sub={ai?.total ? `≈$${cost.toFixed(2)}` : null} color="#00E5FF" />
+      <Row label="— за 7 дней" value={fmtTok(ai?.week7)} />
+      <Row label="— сегодня" value={fmtTok(ai?.today)} />
+      <Row label="Активная модель" value={ai?.activeModel || "…"} color="#7C5CFC" />
+      <div style={{ height: 1, background: C.border, margin: "6px 0 12px" }} />
+      <Row label="DeepSeek баланс" value={dsBalance || "…"} color={dsBalance && parseFloat(dsBalance) < 1 ? "#FF6450" : "#4ADE80"} />
+      <Row label="Капитал в работе" value={capital ? `$${capital.total.toFixed(0)}` : "…"} color="#FFD700" />
+      {capital && <div style={{ fontSize: 11, color: C.muted, marginTop: -4 }}>DeFi ${capital.defi.toFixed(0)} · Bybit ${capital.bybit.toFixed(0)}</div>}
+    </SetupCard>
   );
 }
 
