@@ -232,6 +232,25 @@ export const X_ACCOUNTS = [
 
 export const AI_STATS_URL = "https://ai-stats.dimitriyak.workers.dev";
 
+// Все платные ресурсы сетапа. Цены (usd/мес) — РЕДАКТИРУЕМЫЕ прямо на странице Setup
+// и синхронизируются в облако (ключ resources_cost). Здесь — дефолты/ориентиры,
+// потому что биллинг GCP/Cloudflare/Supabase недоступен программно (урезанные scopes).
+// usd: фактическая ежемесячная стоимость; live: id живого источника данных (если есть).
+export const RESOURCES_DEFAULT = {
+  rub: 80,            // курс ₽/$ для прикидки итога в рублях (редактируется)
+  items: [
+    { id: "claude",     group: "Подписки",        name: "Claude Code",            plan: "Max (подписка)",          usd: 100, color: "#D97706", live: "claude",   note: "Основной агент. Токены покрыты подпиской — flat, не по токенам." },
+    { id: "gce",        group: "Серверы",          name: "GCE VM claude-agent",    plan: "e2-small · europe-west3", usd: 13,  color: "#4ADE80", note: "Хост моста + Claude Code (24/7)." },
+    { id: "cloudrun",   group: "Серверы",          name: "Cloud Run · tg-bot",     plan: "pay-per-use",             usd: 0,   color: "#34D399", note: "Платится по запросам, обычно ~$0." },
+    { id: "vertex",     group: "AI / API",         name: "Vertex AI · Gemini",     plan: "pay-per-token",           usd: 0,   color: "#7C5CFC", note: "Видео / STT / зрение. Пока с бонуса gcloud." },
+    { id: "deepseek",   group: "AI / API",         name: "DeepSeek API",           plan: "pay-as-you-go",           usd: 0,   color: "#25BCFE", live: "deepseek", note: "Запасная модель бота. Баланс — в живом статусе." },
+    { id: "groq",       group: "AI / API",         name: "Groq · STT (запас)",     plan: "free tier",               usd: 0,   color: "#FF9800", note: "Резерв распознавания речи." },
+    { id: "heygen",     group: "AI / API",         name: "HeyGen · видео",         plan: "—",                       usd: 0,   color: "#fc5cf0", note: "Генерация видео, обкатывается." },
+    { id: "supabase",   group: "Инфраструктура",   name: "Supabase",               plan: "Free · 2 проекта",        usd: 0,   color: "#3ECF8E", note: "БД flow/бота + neuromates." },
+    { id: "cloudflare", group: "Инфраструктура",   name: "Cloudflare Pages+Workers", plan: "Free",                  usd: 0,   color: "#F38020", note: "Хостинг дашборда и воркеров." },
+  ],
+};
+
 export const pill = (color, text, small) => ({
   display: "inline-flex", alignItems: "center",
   padding: small ? "2px 8px" : "4px 12px", borderRadius: 100,

@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, NavLink, useNavigate, useParams, Navigate
 import {
   STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL, NW_INITIAL,
   DEFI_WEEKS, TYPE_ICONS, protocolIcon, protocolUrl, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, pill,
-  SYNC_URL, SYNC_TOKEN, AI_STATS_URL, DEFI_PORTFOLIO_URL,
+  SYNC_URL, SYNC_TOKEN, AI_STATS_URL, DEFI_PORTFOLIO_URL, RESOURCES_DEFAULT,
 } from './constants'
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -66,6 +66,32 @@ function ls(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
 function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+// Сжимает картинку (File/Blob) в компактный JPEG data-URL. Нужно, чтобы вставленный
+// из буфера артефакт не раздувал localStorage и облачную синхронизацию вишлиста.
+function imageToDataURL(blob, maxDim = 900, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      try { resolve(canvas.toDataURL("image/jpeg", quality)); }
+      catch (e) { reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("не удалось прочитать изображение")); };
+    img.src = url;
+  });
+}
+
+// true, если строка — ссылка на картинку или data-URL картинки (для вставки текстом).
+const isImageRef = (s) =>
+  /^data:image\//i.test(s) || /^https?:\/\/\S+\.(png|jpe?g|gif|webp|avif|svg)(\?\S*)?$/i.test(s);
 
 function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigate }) {
   const [now, setNow] = useState(new Date());
@@ -444,6 +470,50 @@ function WishesDashboard({ wishState, setWishState }) {
     });
   };
 
+  // Cmd/Ctrl+V в открытой форме: картинку из буфера сжимаем и кладём в поле картинки,
+  // ссылку/​data-URL картинки — тоже. Обычный текст не трогаем (работает дефолт инпута).
+  const attachImage = async (catId, blob) => {
+    try { setAdd(catId, { imageUrl: await imageToDataURL(blob) }); }
+    catch { toast("Не удалось вставить изображение из буфера", "#FF9800"); }
+  };
+
+  const onPasteAdd = async (catId, e) => {
+    const dt = e.clipboardData;
+    if (!dt) return;
+    for (const item of dt.items) {
+      if (item.type && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        e.preventDefault();
+        await attachImage(catId, file);
+        return;
+      }
+    }
+    const text = (dt.getData("text") || "").trim();
+    if (text && isImageRef(text)) {
+      e.preventDefault();
+      setAdd(catId, { imageUrl: text });
+    }
+  };
+
+  // Кнопка «Вставить из буфера» — работает без фокуса в поле (мобильные/тач).
+  const pasteFromClipboard = async (catId) => {
+    try {
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find(t => t.startsWith("image/"));
+          if (type) { await attachImage(catId, await item.getType(type)); return; }
+        }
+      }
+      const text = (await navigator.clipboard?.readText?.() || "").trim();
+      if (text && isImageRef(text)) setAdd(catId, { imageUrl: text });
+      else toast("В буфере нет картинки", "#FF9800");
+    } catch {
+      toast("Нет доступа к буферу — нажми Cmd/Ctrl+V в форме", "#FF9800");
+    }
+  };
+
   return (
     <div className="page-pad" style={{ maxWidth: 1100, margin: "0 auto" }}>
       {/* Header */}
@@ -582,21 +652,33 @@ function WishesDashboard({ wishState, setWishState }) {
                     + Добавить цель
                   </button>
                 ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div onPaste={e => onPasteAdd(cat.id, e)} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <input
                       autoFocus
                       value={addText}
                       onChange={e => setAdd(cat.id, { text: e.target.value })}
                       onKeyDown={e => e.key === "Enter" && addItem(cat.id)}
-                      placeholder="Название цели..."
+                      placeholder="Название цели... (Cmd/Ctrl+V — вставить картинку)"
                       style={{ background: C.surface, border: `1px solid ${cat.color}55`, borderRadius: 8, padding: "7px 10px", color: C.text, fontSize: 14, outline: "none", fontFamily: "inherit" }}
                     />
-                    <input
-                      value={addImg}
-                      onChange={e => setAdd(cat.id, { imageUrl: e.target.value })}
-                      placeholder="URL картинки (необязательно)"
-                      style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", color: C.text, fontSize: 12, outline: "none", fontFamily: "inherit" }}
-                    />
+                    {addImg.startsWith("data:") ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.surface, border: `1px solid ${cat.color}44`, borderRadius: 8, padding: "6px 10px" }}>
+                        <span style={{ fontSize: 12, color: C.text, flex: 1 }}>📎 Картинка из буфера прикреплена</span>
+                        <button onClick={() => setAdd(cat.id, { imageUrl: "" })}
+                          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <input
+                          value={addImg}
+                          onChange={e => setAdd(cat.id, { imageUrl: e.target.value })}
+                          placeholder="URL картинки (необязательно)"
+                          style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", color: C.text, fontSize: 12, outline: "none", fontFamily: "inherit" }}
+                        />
+                        <button onClick={() => pasteFromClipboard(cat.id)} title="Вставить картинку из буфера обмена"
+                          style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "0 10px", color: C.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>📋</button>
+                      </div>
+                    )}
                     {addImg.trim() && (
                       <img src={addImg.trim()} alt="preview"
                         onError={e => e.target.style.display = "none"}
@@ -2002,6 +2084,154 @@ function Dot({ ok }) {
   return <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0, boxShadow: ok ? `0 0 6px ${color}` : "none" }} />;
 }
 
+// ── Платные ресурсы ────────────────────────────────────────────────────────────
+const fmtTok = n => n >= 1_000_000 ? `${(n/1_000_000).toFixed(2)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : `${n ?? 0}`;
+
+// Живой usage AI-токенов: Claude Code (подписка) + TG-бот (Gemini/DeepSeek).
+function UsageStrip() {
+  const [aiStats, setAiStats] = useState(null);
+  const [claude, setClaude] = useState(null);
+  useEffect(() => {
+    const load = () => {
+      fetch(`${AI_STATS_URL}/stats`).then(r => r.json()).then(setAiStats).catch(() => {});
+      fetch(`${SYNC_URL}/sync/claude_usage`, { headers: { Authorization: `Bearer ${SYNC_TOKEN}` } })
+        .then(r => r.json()).then(d => setClaude(d.value)).catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const days7 = Array.from({ length: 7 }, (_, i) => new Date(Date.now() - (6 - i) * 86400000).toISOString().slice(0, 10));
+  const byDay = claude?.byDay || {};
+  const claudeChart = days7.map(d => ({ date: d, tokens: (byDay[d]?.input || 0) + (byDay[d]?.output || 0) }));
+  const claudeToday = claudeChart.at(-1)?.tokens || 0;
+  const claudeWeek = claudeChart.reduce((s, d) => s + d.tokens, 0);
+
+  const Spark = ({ data, color }) => {
+    const W = 150, H = 30, max = Math.max(...data.map(d => d.tokens), 1);
+    const pts = data.map((d, i) => `${data.length > 1 ? (i / (data.length - 1)) * W : W / 2},${H - (d.tokens / max) * (H - 4) - 2}`).join(" ");
+    return (
+      <svg width={W} height={H} style={{ overflow: "visible", display: "block", width: "100%", maxWidth: W }} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" opacity="0.85" />
+        {data.map((d, i) => d.tokens > 0 ? <circle key={i} cx={data.length > 1 ? (i / (data.length - 1)) * W : W / 2} cy={H - (d.tokens / max) * (H - 4) - 2} r="2.5" fill={color} /> : null)}
+      </svg>
+    );
+  };
+
+  const Tile = ({ accent, label, sub, today, week, total, chart, est }) => (
+    <div style={{ flex: "1 1 240px", background: "rgba(255,255,255,0.02)", border: `1px solid ${C.border}`, borderRadius: 12, padding: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: accent, boxShadow: `0 0 6px ${accent}` }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: accent, letterSpacing: "0.05em" }}>{label}</span>
+        <span style={{ fontSize: 10, color: C.muted, marginLeft: "auto" }}>{sub}</span>
+      </div>
+      <div style={{ display: "flex", gap: 16, alignItems: "baseline", marginBottom: 10 }}>
+        <div><div style={{ fontSize: 22, fontWeight: 700, color: accent }}>{fmtTok(today)}</div><div style={{ fontSize: 10, color: C.muted }}>сегодня</div></div>
+        <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{fmtTok(week)}</div><div style={{ fontSize: 10, color: C.muted }}>7 дней</div></div>
+        <div><div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{fmtTok(total)}</div><div style={{ fontSize: 10, color: C.muted }}>всего {est}</div></div>
+      </div>
+      {chart && <Spark data={chart} color={accent} />}
+    </div>
+  );
+
+  if (!claude && !aiStats) return null;
+  // грубая оценка $ для метрящихся токенов бота (Gemini Flash ~$0.25/1M)
+  const botCost = aiStats?.total ? aiStats.total * 0.00000025 : 0;
+  return (
+    <SetupCard title="AI токены · live" accent="#D97706">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        {claude && <Tile accent="#D97706" label="CLAUDE CODE" sub="подписка"
+          today={claudeToday} week={claudeWeek} total={claude.total} chart={claudeChart}
+          est={<span style={{ color: "#4ADE80" }}>· в подписке</span>} />}
+        {aiStats && <Tile accent="#7C5CFC" label="TG БОТ" sub={aiStats.activeModel}
+          today={aiStats.today} week={aiStats.week7} total={aiStats.total}
+          chart={(aiStats.chart || []).map(d => ({ date: d.date, tokens: d.tokens }))}
+          est={botCost > 0 ? <span style={{ color: C.muted }}>≈${botCost.toFixed(2)}</span> : null} />}
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>обновляется каждую минуту · токены Claude покрыты подпиской (flat), бот — оценка по Gemini Flash</div>
+    </SetupCard>
+  );
+}
+
+// Стоимость всех платных ресурсов/мес. Суммы редактируются и синхронизируются (ключ resources_cost).
+function ResourcesCard() {
+  const [cfg, setCfg] = useState(RESOURCES_DEFAULT);
+  const [edit, setEdit] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    cloudGet("resources_cost").then(v => {
+      if (v?.items) {
+        // мерж: новые ресурсы из дефолта добавляем, цены берём из облака
+        const saved = new Map(v.items.map(i => [i.id, i.usd]));
+        setCfg({ rub: v.rub ?? RESOURCES_DEFAULT.rub, items: RESOURCES_DEFAULT.items.map(d => ({ ...d, usd: saved.has(d.id) ? saved.get(d.id) : d.usd })) });
+      }
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
+  }, []);
+
+  const save = (next) => { setCfg(next); cloudSet("resources_cost", { rub: next.rub, items: next.items.map(({ id, usd }) => ({ id, usd })) }); };
+  const setUsd = (id, usd) => save({ ...cfg, items: cfg.items.map(i => i.id === id ? { ...i, usd } : i) });
+  const setRub = (rub) => save({ ...cfg, rub });
+
+  const totalUsd = cfg.items.reduce((s, i) => s + (Number(i.usd) || 0), 0);
+  const groups = [...new Set(cfg.items.map(i => i.group))];
+  const liveDot = { claude: "#D97706", deepseek: "#25BCFE" };
+
+  return (
+    <SetupCard title="Платные ресурсы · стоимость/мес" accent="#FFD700">
+      {/* Итог */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+        <span style={{ fontSize: 28, fontWeight: 800, color: "#FFD700" }}>${totalUsd.toFixed(0)}</span>
+        <span style={{ fontSize: 14, color: C.muted }}>≈ ₽{Math.round(totalUsd * (Number(cfg.rub) || 0)).toLocaleString("ru-RU")} / мес</span>
+        <button onClick={() => setEdit(e => !e)} style={{ marginLeft: "auto", background: edit ? "rgba(118,255,3,0.1)" : "transparent", border: `1px solid ${edit ? "#4ADE80" : C.border}`, borderRadius: 8, color: edit ? "#4ADE80" : C.muted, fontSize: 12, fontWeight: 600, padding: "5px 12px", cursor: "pointer" }}>
+          {edit ? "✓ Готово" : "✎ Править"}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>
+        точный биллинг GCP/Cloudflare недоступен из браузера — суммы вводятся вручную{edit && <> · курс ₽/$ <input type="number" value={cfg.rub} onChange={e => setRub(parseFloat(e.target.value) || 0)} style={{ width: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, padding: "2px 6px", marginLeft: 4 }} /></>}
+      </div>
+
+      {groups.map(g => {
+        const items = cfg.items.filter(i => i.group === g);
+        const sub = items.reduce((s, i) => s + (Number(i.usd) || 0), 0);
+        return (
+          <div key={g} style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>{g}</span>
+              <span style={{ fontSize: 11, color: C.muted }}>${sub.toFixed(0)}/мес</span>
+            </div>
+            {items.map(it => (
+              <div key={it.id} title={it.note || ""} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${C.border}` }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: it.color, flexShrink: 0 }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, color: C.text, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                    {it.name}
+                    {it.live && <span title="есть живые данные usage" style={{ width: 5, height: 5, borderRadius: "50%", background: liveDot[it.live] || "#4ADE80", boxShadow: `0 0 5px ${liveDot[it.live] || "#4ADE80"}` }} />}
+                  </div>
+                  <div style={{ fontSize: 10, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.plan}</div>
+                </div>
+                {edit ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>$</span>
+                    <input type="number" value={it.usd} onChange={e => setUsd(it.id, parseFloat(e.target.value) || 0)}
+                      style={{ width: 60, background: C.surface, border: `1px solid ${it.color}55`, borderRadius: 6, color: C.text, fontSize: 13, padding: "3px 6px", textAlign: "right" }} />
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 14, fontWeight: 700, color: (Number(it.usd) || 0) > 0 ? C.text : C.muted, flexShrink: 0 }}>
+                    {(Number(it.usd) || 0) > 0 ? `$${it.usd}` : "—"}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </SetupCard>
+  );
+}
+
 function SetupDashboard() {
   const [status, setStatus] = useState(null);
   const [svc, setSvc] = useState(() => Object.fromEntries(SETUP_SERVICES.map(s => [s.name, null])));
@@ -2094,63 +2324,11 @@ function SetupDashboard() {
           </div>
         </SetupCard>
 
-        <ResourcesCard dsBalance={status?.deepseek?.balance} />
-
+        <UsageStrip />
+        <ResourcesCard />
         <ChangelogCard />
       </div>
     </div>
-  );
-}
-
-function ResourcesCard({ dsBalance }) {
-  const [ai, setAi] = useState(null);
-  const [capital, setCapital] = useState(null);
-  useEffect(() => {
-    fetch(`${AI_STATS_URL}/stats`).then(r => r.json()).then(setAi).catch(() => {});
-    // капитал в работе = DeFi + Bybit (с GRAM-фиксом)
-    (async () => {
-      try {
-        const [d, b] = await Promise.all([
-          fetch(DEFI_PORTFOLIO_URL).then(r => r.json()).catch(() => null),
-          fetch(BYBIT_PROXY_URL).then(r => r.json()).catch(() => null),
-        ]);
-        const defi = (d?.positions || []).reduce((s, p) => s + (p.usdValue ?? (p.type !== "lp" ? p.balance : 0) ?? 0), 0);
-        let bybit = 0;
-        const acc = b?.result?.list?.[0];
-        if (acc) {
-          bybit = Number(acc.totalEquity) || 0;
-          const gram = (acc.coin || []).find(c => c.coin === "GRAM" && (parseFloat(c.usdValue) || 0) < 0.5 && parseFloat(c.walletBalance) > 0);
-          if (gram) {
-            const pr = await fetch("https://coins.llama.fi/prices/current/coingecko:the-open-network").then(r => r.json()).catch(() => null);
-            const p = pr?.coins?.["coingecko:the-open-network"]?.price;
-            if (p > 0) bybit += parseFloat(gram.walletBalance) * p;
-          }
-        }
-        setCapital({ defi, bybit, total: defi + bybit });
-      } catch (_) {}
-    })();
-  }, []);
-
-  const fmtTok = n => n == null ? "—" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
-  const cost = ai?.total ? (ai.total * 0.00000025) : 0; // грубая оценка ~$0.25/1M
-  const Row = ({ label, value, sub, color }) => (
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 11, gap: 8 }}>
-      <span style={{ fontSize: 13, color: C.muted }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: color || C.text, textAlign: "right" }}>{value}{sub && <span style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}> {sub}</span>}</span>
-    </div>
-  );
-
-  return (
-    <SetupCard title="Ресурсы стека" accent="#00E5FF">
-      <Row label="AI токены · всего" value={fmtTok(ai?.total)} sub={ai?.total ? `≈$${cost.toFixed(2)}` : null} color="#00E5FF" />
-      <Row label="— за 7 дней" value={fmtTok(ai?.week7)} />
-      <Row label="— сегодня" value={fmtTok(ai?.today)} />
-      <Row label="Активная модель" value={ai?.activeModel || "…"} color="#7C5CFC" />
-      <div style={{ height: 1, background: C.border, margin: "6px 0 12px" }} />
-      <Row label="DeepSeek баланс" value={dsBalance || "…"} color={dsBalance && parseFloat(dsBalance) < 1 ? "#FF6450" : "#4ADE80"} />
-      <Row label="Капитал в работе" value={capital ? `$${capital.total.toFixed(0)}` : "…"} color="#FFD700" />
-      {capital && <div style={{ fontSize: 11, color: C.muted, marginTop: -4 }}>DeFi ${capital.defi.toFixed(0)} · Bybit ${capital.bybit.toFixed(0)}</div>}
-    </SetupCard>
   );
 }
 
