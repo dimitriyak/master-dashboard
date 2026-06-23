@@ -75,6 +75,8 @@ const AERO_POOLS = [
   { id: "aero-weth-cbeth", asset: "WETH/cbETH", lpToken: "0x44Ecc644449fC3a9858d2007CaA8CFAa4C561f91", gauge: "0xDf7c8F17Ab7D47702A4a4b6D951d2A4c90F99bf4", decimals: 18, color: "#FF0420", t0: { dec: 18, price: "eth" },    t1: { dec: 18, price: "eth" }    },
   { id: "aero-usdc-aero",  asset: "USDC/AERO",  lpToken: "0x6cDcb1C4A4D1C3C6d054b27AC5B77e89eAFb971d", gauge: "0x4F09bAb2f0E15e2A078A227FE1537665F55b8360", decimals: 18, color: "#FF0420", t0: { dec: 6,  price: "stable" }, t1: { dec: 18, price: "aero" }    },
   { id: "aero-usdc-eurc",  asset: "USDC/EURC",  lpToken: "0x4b6b9B31c72836806B0B1104Cf1CdAB8f0E641b8", gauge: "0x1Fd4a95f4335CF36cAc85912F5b8E7b1bB3c7Ae", decimals: 18, color: "#FF0420", t0: { dec: 6,  price: "stable" }, t1: { dec: 6,  price: "stable" } },
+  // WETH/VVV vAMM (Basic Volatile). VVV без чистого фида — оцениваем пул как 2× сторону WETH (~50/50).
+  { id: "aero-weth-vvv",   asset: "WETH/VVV",   lpToken: "0x01784ef301D79e4B2DF3a21ad9a536d4cF09A5Ce", gauge: "0x37a70295fcefebBB0a29735A53E2e6786a02F930", decimals: 18, color: "#FF0420", t0: { dec: 18, price: "eth" },    t1: { dec: 18, price: "skip" }   },
 ];
 
 // Chainlink ETH/USD on Base — latestAnswer() returns price * 1e8
@@ -256,7 +258,10 @@ async function fetchAerodrome() {
             const amt = Number(rawAmt) / (10 ** t.dec);
             return t.price === "stable" ? amt : t.price === "eth" ? amt * ethPrice : t.price === "aero" ? amt * aeroPrice : 0;
           };
-          const poolUsd = tokenPrice(pool.t0, reserve0) + tokenPrice(pool.t1, reserve1);
+          const v0 = tokenPrice(pool.t0, reserve0);
+          const v1 = tokenPrice(pool.t1, reserve1);
+          // Если одна сторона без цены ("skip") — волатильный пул ~50/50, оцениваем как 2× известную сторону.
+          const poolUsd = (v0 && v1) ? v0 + v1 : 2 * (v0 || v1);
           usdValue = (totalLp / (Number(totalSupply) / 1e18)) * poolUsd;
         }
       }
