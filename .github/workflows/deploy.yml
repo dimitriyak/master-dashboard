@@ -28,3 +28,18 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
           command: pages deploy dist --project-name=dimitriyak --commit-dirty=true
+
+      # Деплой воркеров (только тех, что меняем; остальные деплоятся вручную).
+      - name: Deploy defi-portfolio worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: deploy -c workers/defi-portfolio-wrangler.json
+
+      - name: Deploy portfolio-monitor worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: deploy -c workers/portfolio-monitor-wrangler.json
