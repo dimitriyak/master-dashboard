@@ -16,6 +16,7 @@ const RPC = {
   base:     ["https://base-rpc.publicnode.com", "https://base-mainnet.public.blastapi.io", "https://base.drpc.org", "https://1rpc.io/base"],
   ethereum: ["https://ethereum-rpc.publicnode.com", "https://eth-mainnet.public.blastapi.io", "https://eth.drpc.org", "https://rpc.mevblocker.io", "https://1rpc.io/eth"],
   bera:     ["https://rpc.berachain.com", "https://berachain.drpc.org"],
+  arbitrum: ["https://arbitrum-one-rpc.publicnode.com", "https://arb1.arbitrum.io/rpc", "https://arbitrum.drpc.org", "https://1rpc.io/arb"],
 };
 
 // JSON-RPC call (single or batch) with endpoint rotation: tries each until a valid result comes back.
@@ -343,12 +344,13 @@ async function fetchEthPrice() {
 // ── Native ETH balances (Base + Ethereum mainnet) ────────────────────────────
 async function fetchNativeBalances() {
   const LATEST_ANS_SEL = "0x50d25bcd";
-  const [baseData, ethData] = await Promise.all([
+  const [baseData, ethData, arbData] = await Promise.all([
     rpcCall("base", [
       { jsonrpc: "2.0", id: 1, method: "eth_call",      params: [{ to: CHAINLINK_ETH_USD, data: LATEST_ANS_SEL }, "latest"] },
       { jsonrpc: "2.0", id: 2, method: "eth_getBalance", params: [WALLET, "latest"] },
     ]),
     rpcCall("ethereum", [{ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [WALLET, "latest"] }]),
+    rpcCall("arbitrum", [{ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [WALLET, "latest"] }]),
   ]);
 
   const priceRaw = Array.isArray(baseData) ? baseData.find(r => r.id === 1)?.result : null;
@@ -366,6 +368,7 @@ async function fetchNativeBalances() {
   };
   addEth(baseData, 2, "base");
   addEth(ethData,  1, "ethereum");
+  addEth(arbData,  1, "arbitrum");
   return results;
 }
 
