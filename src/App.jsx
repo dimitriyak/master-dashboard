@@ -937,10 +937,8 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
 
   useEffect(() => {
     const LIGHTER_POOLS = [
-      { name: "Candle Effect v2",           pool_index: 281474976543116, user_shares: 47698  },
-      { name: "K Pool",                     pool_index: 281474976680237, user_shares: 13092  },
-      { name: "Edge & Hedge (L/S Factors)", pool_index: 281474976688087, user_shares: 33334  },
-      { name: "Guinea Pool",               pool_index: 281474976694250, user_shares: 80128  },
+      { name: "Candle Effect v2", pool_index: 281474976543116, user_shares: 47698 },
+      { name: "K Pool",           pool_index: 281474976680237, user_shares: 32626 },
     ];
     const BASE = "https://mainnet.zklighter.elliot.ai/api/v1/publicPoolsMetadata";
 
@@ -962,7 +960,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
           )
         );
         const pools = results.flatMap(r => r.status === "fulfilled" && r.value ? [r.value] : []);
-        if (pools.length < 4) return; // partial data — skip, keep previous
+        if (pools.length < LIGHTER_POOLS.length) return; // partial data — skip, keep previous
         const usdValue = Math.round(pools.reduce((s, p) => s + p.equity, 0) * 100) / 100;
         const active = pools.filter(p => p.apy != null && p.equity > 0);
         const w = active.reduce((s, p) => s + p.equity, 0);
