@@ -933,39 +933,43 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
     "aave-eth-paxg":  4, // Aave V3 Ethereum PAXG → position id=4
   };
 
-  const [lighterLive, setLighterLive] = useState(null); // { usdValue, apy, pools }
+  const [lighterLive, setLighterLive] = useState(null); // { usdValue, apy, principal, pools }
 
   useEffect(() => {
-    const LIGHTER_POOLS = [
-      { name: "Candle Effect v2", pool_index: 281474976543116, user_shares: 47698 },
-      { name: "K Pool",           pool_index: 281474976680237, user_shares: 32626 },
-    ];
-    const BASE = "https://mainnet.zklighter.elliot.ai/api/v1/publicPoolsMetadata";
+    // Полностью авто: тянем доли пользователя из его аккаунта Lighter, затем по каждому
+    // public-пулу считаем долю в нём. Пересобрал пулы на бирже → дашборд подхватит сам.
+    const LIGHTER_ACCOUNT = 729632; // sub-account кошелька 0x2d80…6aeC
+    const API = "https://mainnet.zklighter.elliot.ai/api/v1";
 
     const load = async () => {
       try {
+        const acc = await fetch(`${API}/account?by=index&value=${LIGHTER_ACCOUNT}`).then(r => r.json());
+        const shares = acc.accounts?.[0]?.shares || [];
+        if (!shares.length) { setLighterLive({ usdValue: 0, apy: null, principal: 0, pools: [] }); return; }
         const results = await Promise.allSettled(
-          LIGHTER_POOLS.map(p =>
-            fetch(`${BASE}?index=${p.pool_index + 1}&limit=1`)
+          shares.map(s =>
+            fetch(`${API}/publicPoolsMetadata?index=${s.public_pool_index + 1}&limit=1`)
               .then(r => r.json())
               .then(data => {
                 const pool = data.public_pools?.[0];
                 if (!pool) return null;
                 const totalAsset = Number(pool.total_asset_value) || 0;
                 const totalShares = Number(pool.total_shares) || 0;
-                const equity = totalShares > 0 ? (p.user_shares / totalShares) * totalAsset : 0;
+                const userShares = Number(s.shares_amount) || 0;
+                const equity = totalShares > 0 ? (userShares / totalShares) * totalAsset : 0;
                 const apy = pool.annual_percentage_yield > 0 ? Math.round(pool.annual_percentage_yield * 100) / 100 : null;
-                return { name: p.name, equity: Math.round(equity * 100) / 100, apy };
+                return { name: pool.name || `Pool ${s.public_pool_index}`, equity: Math.round(equity * 100) / 100, apy };
               })
           )
         );
         const pools = results.flatMap(r => r.status === "fulfilled" && r.value ? [r.value] : []);
-        if (pools.length < LIGHTER_POOLS.length) return; // partial data — skip, keep previous
+        if (pools.length < shares.length) return; // частичные данные — оставить прежние
         const usdValue = Math.round(pools.reduce((s, p) => s + p.equity, 0) * 100) / 100;
+        const principal = Math.round(shares.reduce((s, x) => s + (Number(x.principal_amount) || 0), 0) * 100) / 100;
         const active = pools.filter(p => p.apy != null && p.equity > 0);
         const w = active.reduce((s, p) => s + p.equity, 0);
         const apy = w > 0 ? Math.round(active.reduce((s, p) => s + p.apy * p.equity / w, 0) * 100) / 100 : null;
-        setLighterLive({ usdValue, apy, pools });
+        setLighterLive({ usdValue, apy, principal, pools });
       } catch (_) {}
     };
     load();
@@ -1075,7 +1079,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
     // Lighter: fetch directly from browser (bypasses WAF that blocks CF Workers)
     if (p.matchId === "lighter-public-pools" && lighterLive) {
       const subRows = (lighterLive.pools || []).map(pl => ({ label: pl.name, usd: pl.equity, apy: pl.apy }));
-      return { ...p, liveDollarValue: lighterLive.usdValue, liveApy: lighterLive.apy, liveRewards: null, subRows };
+      return { ...p, invested: lighterLive.principal ?? p.invested, liveDollarValue: lighterLive.usdValue, liveApy: lighterLive.apy, liveRewards: null, subRows };
     }
     const chainPos = p.matchId
       ? chainData?.positions?.find(cp => p.matchId.endsWith("-") ? cp.id?.startsWith(p.matchId) : cp.id === p.matchId)
