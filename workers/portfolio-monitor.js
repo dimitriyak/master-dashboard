@@ -101,6 +101,7 @@ async function runAlerts(env) {
   const bybit = await getBybit(env);
   const cur = snapshot(data);
   cur.bybit = bybit?.coins || {};
+  cur.bybitOk = !!bybit && Object.keys(cur.bybit).length > 0;
 
   let baseline = await env.STATE.get(`baseline:${day}`, "json");
   if (!baseline) {
@@ -157,15 +158,19 @@ async function runAlerts(env) {
 
   // 5) Bybit монеты: пропала / новая / просадка vs дневной baseline
   const fmtAmt = n => Number(n) >= 1 ? Number(n).toFixed(2) : Number(n).toFixed(6);
+  // Только если Bybit реально ответил (есть монеты). Пустой/сбойный ответ
+  // НЕ трактуем как «всё продано» — иначе ложные алерты «пропал».
   const bbBase = baseline.bybit, bbCur = cur.bybit || {};
-  if (bbBase) for (const [coin, b] of Object.entries(bbBase)) {
-    const c = bbCur[coin];
-    if (!c) add(`bb-gone-${coin}`, `🔻 <b>Bybit: ${coin} пропал</b>\nБыло ${fmtAmt(b.amt)} (~$${b.usd.toFixed(0)}). Продано / конвертировано / выведено.`);
-    else if (b.usd > 50 && b.amt > 0 && (b.amt - c.amt) / b.amt >= 0.25)
-      add(`bb-drop-${coin}`, `📉 <b>Bybit: ${coin} уменьшился</b>\n${fmtAmt(b.amt)} → ${fmtAmt(c.amt)} (~-$${(b.usd - c.usd).toFixed(0)}).`);
-  }
-  if (bbBase) for (const coin of Object.keys(bbCur)) {
-    if (!bbBase[coin]) add(`bb-new-${coin}`, `🆕 <b>Bybit: новая монета ${coin}</b>\n${fmtAmt(bbCur[coin].amt)} (~$${bbCur[coin].usd.toFixed(0)})`);
+  if (bbBase && cur.bybitOk) {
+    for (const [coin, b] of Object.entries(bbBase)) {
+      const c = bbCur[coin];
+      if (!c) add(`bb-gone-${coin}`, `🔻 <b>Bybit: ${coin} пропал</b>\nБыло ${fmtAmt(b.amt)} (~$${b.usd.toFixed(0)}). Продано / конвертировано / выведено.`);
+      else if (b.usd > 50 && b.amt > 0 && (b.amt - c.amt) / b.amt >= 0.25)
+        add(`bb-drop-${coin}`, `📉 <b>Bybit: ${coin} уменьшился</b>\n${fmtAmt(b.amt)} → ${fmtAmt(c.amt)} (~-$${(b.usd - c.usd).toFixed(0)}).`);
+    }
+    for (const coin of Object.keys(bbCur)) {
+      if (!bbBase[coin]) add(`bb-new-${coin}`, `🆕 <b>Bybit: новая монета ${coin}</b>\n${fmtAmt(bbCur[coin].amt)} (~$${bbCur[coin].usd.toFixed(0)})`);
+    }
   }
 
   // Persist "last seen" + dedupe set
