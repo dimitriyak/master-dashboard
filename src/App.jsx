@@ -2528,27 +2528,6 @@ function SetupDashboard() {
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
         <div style={{ fontSize: 14, color: C.muted }}>Как устроена моя работа с AI по всем проектам</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => {
-            const keys = Object.keys(localStorage).filter(k => k.startsWith("gh_cache_"));
-            keys.forEach(k => localStorage.removeItem(k));
-            toast(`Кэш GitHub очищен (${keys.length} записей)`, "#FF9800");
-          }} style={{ background: "rgba(255,152,0,0.08)", border: "1px solid rgba(255,152,0,0.25)", borderRadius: 8, color: "#FF9800", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" }}>
-            Сбросить кэш GitHub
-          </button>
-          <button onClick={exportData} style={{ background: "rgba(0,229,255,0.08)", border: "1px solid rgba(0,229,255,0.25)", borderRadius: 8, color: "#00E5FF", fontSize: 12, fontWeight: 600, padding: "6px 14px", cursor: "pointer" }}>
-            ↓ Бэкап данных
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-        {SETUP_LINKS.map(l => (
-          <a key={l.label} href={l.href} target="_blank" rel="noreferrer"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, color: l.color, fontSize: 12, fontWeight: 600, textDecoration: "none" }}>
-            ↗ {l.label}
-          </a>
-        ))}
       </div>
 
       <div className="setup-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 14 }}>
@@ -2862,7 +2841,6 @@ const navItems = [
   { to: "/defi",      label: "Crypto",    color: "#00E5FF" },
   { to: "/wishlist",  label: "Wishlist",  color: "#7C5CFC" },
   { to: "/networth",  label: "Networth",  color: "#4ADE80" },
-  { to: "/weekly",    label: "Weekly",    color: "#FF9800" },
   { to: "/setup",     label: "Setup",     color: "#6C63FF" },
 ];
 
@@ -2902,25 +2880,6 @@ function Shell({ children, accent, syncStatus }) {
             </NavLink>
           ))}
         </div>
-        <div style={{ position: "relative" }}>
-          <button onClick={() => setShowHelp(p => !p)} style={{ width: 22, height: 22, borderRadius: "50%", background: "transparent", border: `1px solid ${C.border}`, color: C.muted, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>?</button>
-          {showHelp && (
-            <div style={{ position: "absolute", right: 0, top: 28, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", zIndex: 200, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, letterSpacing: "0.08em" }}>ШОРТКАТЫ</div>
-              {SHORTCUTS_HELP.map(s => (
-                <div key={s.key} style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 5 }}>
-                  <kbd style={{ fontSize: 11, color: "#00E5FF", fontFamily: "monospace", background: "rgba(0,229,255,0.08)", borderRadius: 4, padding: "1px 5px" }}>{s.key}</kbd>
-                  <span style={{ fontSize: 11, color: C.text }}>{s.desc}</span>
-                </div>
-              ))}
-              <div style={{ fontSize: 10, color: C.muted, marginTop: 8 }}>Нажми ? чтобы закрыть</div>
-            </div>
-          )}
-        </div>
-        <div title={syncStatus === "synced" ? "Данные синхронизированы" : syncStatus === "loading" ? "Синхронизация..." : syncStatus === "error" ? "Ошибка синхронизации" : ""}
-          style={{ width: 6, height: 6, borderRadius: "50%", flexShrink: 0, transition: "background 0.3s",
-            background: syncStatus === "synced" ? "#00E5FF" : syncStatus === "loading" ? "#FFD700" : syncStatus === "error" ? "#FF6450" : C.border,
-          }} />
       </div>
       <div className="fade-in">{children}</div>
     </div>
