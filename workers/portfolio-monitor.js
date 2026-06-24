@@ -181,21 +181,54 @@ async function runAlerts(env) {
   return { ok: true, alerts: alerts.length };
 }
 
+// ── History (daily snapshot for charts) ───────────────────────────────────────
+// One entry per day in KV: `hist:YYYY-MM-DD` (no TTL — kept forever).
+// Index `hist:index` holds the sorted list of dates so we can read a range
+// without relying on KV list(). Breakdown lets the UI explain "из-за чего +/-".
+async function recordHistory(env, { data, bybit }) {
+  const day = today();
+  const breakdown = {};
+  for (const p of data.positions) {
+    const usd = posVal(p);
+    if (Math.abs(usd) >= 1) breakdown[`defi:${p.id}`] = { name: `${p.protocol} ${p.asset}`, usd };
+  }
+  for (const [coin, c] of Object.entries(bybit?.coins || {}))
+    breakdown[`bybit:${coin}`] = { name: `Bybit ${coin}`, usd: c.usd };
+
+  const defiTotal = data.positions.reduce((s, p) => s + posVal(p), 0);
+  const total = defiTotal + (bybit?.equity || 0);
+  const entry = { date: day, total, defi: defiTotal, bybit: bybit?.equity || 0, breakdown };
+
+  await env.STATE.put(`hist:${day}`, JSON.stringify(entry)); // no expiration
+  const index = (await env.STATE.get("hist:index", "json")) || [];
+  if (!index.includes(day)) { index.push(day); index.sort(); await env.STATE.put("hist:index", JSON.stringify(index)); }
+  return entry;
+}
+
+async function getHistory(env, days = 0) {
+  let index = (await env.STATE.get("hist:index", "json")) || [];
+  if (days > 0) index = index.slice(-days);
+  const entries = await Promise.all(index.map(d => env.STATE.get(`hist:${d}`, "json")));
+  return entries.filter(Boolean);
+}
+
 // ── Daily AI digest ─────────────────────────────────────────────────────────
 async function runDigest(env) {
-  const [data, bybit] = await Promise.all([getPortfolio(env), getBybitEquity(env)]);
+  const [data, bybit] = await Promise.all([getPortfolio(env), getBybit(env)]);
   if (!data) return { ok: false, error: "no portfolio data" };
+  await recordHistory(env, { data, bybit }).catch(() => {});
 
   const lines = data.positions
     .filter(p => Math.abs(posVal(p)) >= 1)
     .sort((a, b) => posVal(b) - posVal(a))
     .map(p => `${p.protocol} ${p.asset}: $${posVal(p).toFixed(0)}${p.apy != null ? ` (APY ${p.apy.toFixed(1)}%)` : ""}`);
   const defiTotal = data.positions.reduce((s, p) => s + posVal(p), 0);
-  const grand = defiTotal + (bybit || 0);
+  const bybitEq = bybit?.equity || 0;
+  const grand = defiTotal + bybitEq;
 
   const summary = [
     `Портфель пользователя на сегодня (${today()}):`,
-    `Итого крипто: $${grand.toFixed(0)} (DeFi $${defiTotal.toFixed(0)}${bybit ? `, Bybit $${bybit.toFixed(0)}` : ""}).`,
+    `Итого крипто: $${grand.toFixed(0)} (DeFi $${defiTotal.toFixed(0)}${bybitEq ? `, Bybit $${bybitEq.toFixed(0)}` : ""}).`,
     `Позиции:`, ...lines,
   ].join("\n");
 
@@ -209,7 +242,7 @@ async function runDigest(env) {
   }).then(r => r.json()).catch(() => null);
 
   const text = ai?.content?.[0]?.text || "AI недоступен.";
-  const msg = `🧠 <b>Дайджест портфеля</b> · ${today()}\n💰 Итого: <b>$${grand.toFixed(0)}</b> (DeFi $${defiTotal.toFixed(0)}${bybit ? ` · Bybit $${bybit.toFixed(0)}` : ""})\n\n${escapeHtml(text)}`;
+  const msg = `🧠 <b>Дайджест портфеля</b> · ${today()}\n💰 Итого: <b>$${grand.toFixed(0)}</b> (DeFi $${defiTotal.toFixed(0)}${bybitEq ? ` · Bybit $${bybitEq.toFixed(0)}` : ""})\n\n${escapeHtml(text)}`;
   const res = await sendTelegram(env, msg);
   return { ok: res.ok, sent: true };
 }
@@ -235,10 +268,21 @@ export default {
     if (run === "test") return json(await sendTelegram(env, "✅ <b>Portfolio Monitor</b> подключён. Тестовое сообщение."));
     if (run === "digest") return json(await runDigest(env));
     if (run === "alerts") return json(await runAlerts(env));
-    return json({ ok: true, hint: "use ?run=test | ?run=alerts | ?run=digest" });
+    if (run === "history") {
+      const days = Number(new URL(req.url).searchParams.get("days")) || 0;
+      return json(await getHistory(env, days), 200, true);
+    }
+    if (run === "snapshot") { // ручной снимок «сейчас» (для бэкфилла/теста)
+      const [data, bybit] = await Promise.all([getPortfolio(env), getBybit(env)]);
+      if (!data) return json({ ok: false, error: "no portfolio data" });
+      return json(await recordHistory(env, { data, bybit }));
+    }
+    return json({ ok: true, hint: "use ?run=test | ?run=alerts | ?run=digest | ?run=history[&days=N] | ?run=snapshot" });
   },
 };
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data, null, 2), { status, headers: { "Content-Type": "application/json" } });
+function json(data, status = 200, cors = false) {
+  const headers = { "Content-Type": "application/json" };
+  if (cors) headers["Access-Control-Allow-Origin"] = "*";
+  return new Response(JSON.stringify(data, null, 2), { status, headers });
 }

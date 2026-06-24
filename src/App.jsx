@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom'
 import {
   STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL, NW_INITIAL,
   DEFI_WEEKS, TYPE_ICONS, protocolIcon, protocolUrl, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, pill,
-  SYNC_URL, SYNC_TOKEN, AI_STATS_URL, DEFI_PORTFOLIO_URL, RESOURCES_DEFAULT,
+  SYNC_URL, SYNC_TOKEN, AI_STATS_URL, DEFI_PORTFOLIO_URL, PORTFOLIO_MONITOR_URL, RESOURCES_DEFAULT,
 } from './constants'
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -863,6 +863,166 @@ function TaskRow({ taskText, taskDesc, isDone, onToggle, isLast }) {
   );
 }
 
+// Движение всего крипто-портфеля во времени + атрибуция «из-за чего +/-».
+// Данные — дневные снапшоты из portfolio-monitor (KV, бессрочно).
+function PortfolioChart() {
+  const PERIODS = [
+    { key: "7",   label: "Неделя", days: 7 },
+    { key: "30",  label: "Месяц",  days: 30 },
+    { key: "90",  label: "3 мес",  days: 90 },
+    { key: "365", label: "Год",    days: 365 },
+  ];
+  const [period, setPeriod] = useState("30");
+  const [hist, setHist] = useState(null);     // весь массив снапшотов | [] | null(загрузка)
+  const [hover, setHover] = useState(null);   // индекс точки под курсором
+  const wrapRef = useRef(null);
+  const [W, setW] = useState(820);
+  const H = 170, PAD = 6;
+
+  useEffect(() => {
+    fetch(`${PORTFOLIO_MONITOR_URL}?run=history`)
+      .then(r => r.json())
+      .then(d => setHist(Array.isArray(d) ? d : []))
+      .catch(() => setHist([]));
+  }, []);
+  useEffect(() => {
+    const measure = () => { if (wrapRef.current) setW(wrapRef.current.clientWidth); };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  if (hist == null) return null;
+
+  const days = PERIODS.find(p => p.key === period).days;
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const data = hist.filter(e => e.date >= cutoff);
+
+  const Box = ({ children }) => (
+    <div className="page-pad-sm" style={{ paddingTop: 4, paddingBottom: 4 }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px" }}>{children}</div>
+    </div>
+  );
+
+  const Switcher = () => (
+    <div style={{ display: "flex", gap: 4 }}>
+      {PERIODS.map(p => (
+        <button key={p.key} onClick={() => { setPeriod(p.key); setHover(null); }}
+          style={{
+            background: period === p.key ? C.surface : "transparent",
+            border: `1px solid ${period === p.key ? "#FFD70055" : C.border}`,
+            color: period === p.key ? C.text : C.muted,
+            borderRadius: 6, padding: "3px 9px", fontSize: 11, cursor: "pointer", fontWeight: 600,
+          }}>{p.label}</button>
+      ))}
+    </div>
+  );
+
+  const Header = () => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+      <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.14em", fontWeight: 600 }}>ДВИЖЕНИЕ ПОРТФЕЛЯ</span>
+      <Switcher />
+    </div>
+  );
+
+  if (data.length < 2) {
+    return (
+      <Box>
+        <Header />
+        <div style={{ fontSize: 12, color: C.muted, padding: "16px 0", textAlign: "center" }}>
+          Накапливаю историю — снимок пишется раз в день. График появится, когда наберётся минимум 2 дня.
+        </div>
+      </Box>
+    );
+  }
+
+  const totals = data.map(e => e.total);
+  const minV = Math.min(...totals), maxV = Math.max(...totals);
+  const span = maxV - minV || 1;
+  const innerW = Math.max(W - PAD * 2, 1);
+  const x = i => PAD + (data.length > 1 ? (i / (data.length - 1)) * innerW : innerW / 2);
+  const y = v => PAD + (1 - (v - minV) / span) * (H - PAD * 2);
+  const linePts = data.map((e, i) => `${x(i)},${y(e.total)}`).join(" ");
+  const areaPts = `${PAD},${H - PAD} ${linePts} ${PAD + innerW},${H - PAD}`;
+
+  const first = data[0], last = data[data.length - 1];
+  const change = last.total - first.total;
+  const up = change >= 0;
+  const stroke = up ? "#4ADE80" : "#FF6450";
+
+  // Атрибуция: вклад каждой позиции в изменение тотала за период (last − first).
+  const keys = new Set([...Object.keys(first.breakdown || {}), ...Object.keys(last.breakdown || {})]);
+  const moves = [...keys].map(k => {
+    const a = first.breakdown?.[k], b = last.breakdown?.[k];
+    const name = b?.name || a?.name || k;
+    return { name, delta: (b?.usd || 0) - (a?.usd || 0) };
+  }).filter(m => Math.abs(m.delta) >= 1).sort((m1, m2) => m2.delta - m1.delta);
+  const gainers = moves.filter(m => m.delta > 0).slice(0, 3);
+  const losers = moves.filter(m => m.delta < 0).slice(-3).reverse();
+
+  const hp = hover != null ? data[hover] : null;
+
+  return (
+    <Box>
+      <Header />
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
+        <span style={{ fontSize: 24, fontWeight: 800, color: C.text, lineHeight: 1 }}>
+          ${(hp ? hp.total : last.total).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+        </span>
+        {hp
+          ? <span style={{ fontSize: 12, color: C.muted }}>{hp.date}</span>
+          : <span style={{ fontSize: 13, fontWeight: 700, color: stroke }}>
+              {up ? "+" : "−"}${Math.abs(change).toLocaleString("en-US", { maximumFractionDigits: 0 })} за период
+            </span>}
+      </div>
+
+      <div ref={wrapRef} style={{ position: "relative" }}>
+        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+          style={{ display: "block", overflow: "visible" }}
+          onMouseLeave={() => setHover(null)}
+          onMouseMove={e => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const px = (e.clientX - rect.left) / rect.width * W;
+            let best = 0, bd = Infinity;
+            data.forEach((_, i) => { const d = Math.abs(x(i) - px); if (d < bd) { bd = d; best = i; } });
+            setHover(best);
+          }}>
+          <defs>
+            <linearGradient id="pcFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={stroke} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={stroke} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polygon points={areaPts} fill="url(#pcFill)" />
+          <polyline points={linePts} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          {hp && <line x1={x(hover)} y1={PAD} x2={x(hover)} y2={H - PAD} stroke={C.muted} strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+          {hp && <circle cx={x(hover)} cy={y(hp.total)} r="3.5" fill={stroke} vectorEffect="non-scaling-stroke" />}
+        </svg>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+        <span style={{ fontSize: 9, color: C.muted }}>{first.date}</span>
+        <span style={{ fontSize: 9, color: C.muted }}>{last.date}</span>
+      </div>
+
+      {(gainers.length > 0 || losers.length > 0) && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 10, color: C.muted, letterSpacing: "0.12em", fontWeight: 600, marginBottom: 8 }}>ИЗ-ЗА ЧЕГО</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 6 }}>
+            {[...gainers, ...losers].map((m, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}>
+                <span style={{ color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</span>
+                <b style={{ color: m.delta >= 0 ? "#4ADE80" : "#FF6450", flexShrink: 0 }}>
+                  {m.delta >= 0 ? "+" : "−"}${Math.abs(m.delta).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                </b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Box>
+  );
+}
+
 function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const { tab = "portfolio" } = useParams();
   const navigate = useNavigate();
@@ -1273,6 +1433,8 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
           </div>
         </div>
       )}
+
+      <PortfolioChart />
 
       <div style={{ padding: "14px 28px 6px" }}>
         <span style={{ fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>DeFi</span>

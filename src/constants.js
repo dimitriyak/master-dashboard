@@ -218,6 +218,7 @@ export const BYBIT_PROXY_URL = "https://bybit-proxy.dimitriyak.workers.dev";
 export const AI_PROXY_URL = import.meta.env.VITE_AI_PROXY_URL || "https://ai-proxy.dimitriyak.workers.dev";
 export const NEWS_URL = "https://defi-news.dimitriyak.workers.dev";
 export const DEFI_PORTFOLIO_URL = "https://defi-portfolio.dimitriyak.workers.dev";
+export const PORTFOLIO_MONITOR_URL = "https://portfolio-monitor.dimitriyak.workers.dev";
 
 export const X_ACCOUNTS = [
   { handle: "DefiIgnas",         name: "Ignas DeFi",        focus: "Разборы протоколов, yield стратегии" },
