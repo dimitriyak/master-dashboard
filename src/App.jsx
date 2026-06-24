@@ -143,9 +143,6 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
             {now.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}
             <span style={{ marginLeft: 10, fontFamily: "monospace", color: "#4ADE80" }}>{now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
           </div>
-          <button onClick={() => onNavigate("weekly")} style={{ background: "rgba(255,152,0,0.1)", border: "1px solid rgba(255,152,0,0.3)", borderRadius: 8, color: "#FF9800", fontSize: 11, fontWeight: 600, padding: "5px 12px", cursor: "pointer" }}>
-            Weekly Report →
-          </button>
         </div>
         <h1 className="overview-h1" style={{ fontSize: 30, fontWeight: 700, color: C.text, letterSpacing: "-0.02em", margin: 0 }}>
           {(() => { const h = now.getHours(); return h < 6 ? "Доброй ночи, Дима" : h < 12 ? "Доброе утро, Дима" : h < 18 ? "Добрый день, Дима" : "Добрый вечер, Дима"; })()}
@@ -1616,7 +1613,6 @@ function useAccent() {
   if (loc.pathname.startsWith("/way"))     return "#FFD700";
   if (loc.pathname.startsWith("/wishlist"))return "#7C5CFC";
   if (loc.pathname.startsWith("/networth"))return "#4ADE80";
-  if (loc.pathname.startsWith("/weekly"))  return "#FF9800";
   if (loc.pathname.startsWith("/setup"))   return "#6C63FF";
   return "#00E5FF";
 }
@@ -2636,207 +2632,6 @@ async function fetchGhProject(repo) {
   return data;
 }
 
-const TG_BOT_USERNAME = "dimitriyakclaude_bot";
-
-function WeeklyReport({ wishState, defiPositions, defiHw, wayData, nwData }) {
-  const [aiStats, setAiStats] = useState(null);
-  const [claudeStats, setClaudeStats] = useState(null);
-  const [ghData, setGhData] = useState({});
-  const [tgSent, setTgSent] = useState(false);
-  useEffect(() => {
-    fetch(`${AI_STATS_URL}/stats`).then(r => r.json()).then(setAiStats).catch(() => {});
-    fetch(`${SYNC_URL}/sync/claude_usage`, { headers: { Authorization: `Bearer ${SYNC_TOKEN}` } })
-      .then(r => r.json()).then(d => setClaudeStats(d.value)).catch(() => {});
-    Promise.all(AI_PROJECTS.map(p => fetchGhProject(p.repo).then(d => [p.repo, d]))).then(entries => {
-      setGhData(Object.fromEntries(entries));
-    }).catch(() => {});
-  }, []);
-
-  const fmtK = n => n >= 1_000_000 ? `${(n/1_000_000).toFixed(2)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : `${n}`;
-
-  // Networth
-  const months = (nwData || []).sort((a, b) => a.month.localeCompare(b.month));
-  const latest = months[months.length - 1];
-  const prev   = months[months.length - 2];
-  const nwDelta = latest && prev ? latest.nwUsd - prev.nwUsd : 0;
-  const nwPct   = prev?.nwUsd ? ((nwDelta / prev.nwUsd) * 100).toFixed(1) : null;
-  const MRU = ["Янв","Фев","Мар","Апр","Май","Июн","Июл","Авг","Сен","Окт","Ноя","Дек"];
-  const fmtM = m => { const [y, mo] = m.split("-"); return `${MRU[parseInt(mo)-1]} ${y}`; };
-
-  // DeFi
-  const defiTotal = DEFI_WEEKS.reduce((s, w) => s + w.tasks.length, 0);
-  const defiDone  = Object.values(defiHw).filter(Boolean).length;
-  const defiPct   = Math.round((defiDone / defiTotal) * 100);
-  const defiPnl   = defiPositions.reduce((s, p) => s + (p.current - p.allocated), 0);
-  const defiCur   = defiPositions.reduce((s, p) => s + p.current, 0);
-  const currentWeek = DEFI_WEEKS.find(w => w.tasks.some((_, i) => !defiHw[`${w.week}-${i}`]));
-  const weekDone  = currentWeek ? currentWeek.tasks.filter((_, i) => defiHw[`${currentWeek.week}-${i}`]).length : 0;
-  const weekTotal = currentWeek?.tasks.length || 0;
-
-  // Wishlist
-  const wishTotal = WISH_CATEGORIES.reduce((s, c) => s + c.items.length, 0);
-  const wishDone  = WISH_CATEGORIES.reduce((s, c) => s + c.items.filter((_, i) => wishState[c.id]?.[i]?.done).length, 0);
-
-  // Цель $1M (капитал из Networth)
-  const wayCapital = (() => { const m = (nwData || []).slice().sort((a, b) => a.month.localeCompare(b.month)).at(-1); return m?.nwUsd ?? wayData.currentAmount ?? 0; })();
-  const wayPct = wayCapital / 1000000 * 100;
-  const wayDone = (wayData.tasks || []).filter(t => t.done).length;
-
-  // AI tokens this week
-  const claudeDays7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(Date.now() - (6 - i) * 86400000);
-    return d.toISOString().slice(0, 10);
-  });
-  const claudeWeekTokens = claudeStats ? claudeDays7.reduce((s, d) => {
-    const day = claudeStats.byDay?.[d];
-    return s + (day?.input || 0) + (day?.output || 0);
-  }, 0) : 0;
-
-  const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay() + 1);
-  const fmtDate = d => d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
-
-  const Section = ({ title, color, children }) => (
-    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: "18px 20px", marginBottom: 16 }}>
-      <div style={{ fontSize: 11, color, fontWeight: 600, letterSpacing: "0.1em", marginBottom: 14 }}>{title}</div>
-      {children}
-    </div>
-  );
-
-  const Row = ({ label, val, sub, color = C.text }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-      <span style={{ fontSize: 14, color: C.muted }}>{label}</span>
-      <span style={{ fontSize: 14, fontWeight: 600, color }}>
-        {val}{sub && <span style={{ fontSize: 11, color: C.muted, marginLeft: 6 }}>{sub}</span>}
-      </span>
-    </div>
-  );
-
-  const Bar = ({ pct, color }) => (
-    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden", marginBottom: 8 }}>
-      <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: color, borderRadius: 2, transition: "width 0.4s" }} />
-    </div>
-  );
-
-  return (
-    <div className="page-pad" style={{ maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <div>
-            <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>Неделя · {fmtDate(weekStart)} — {fmtDate(today)}</div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, color: C.text, margin: 0, letterSpacing: "-0.02em" }}>Weekly Report</h1>
-          </div>
-          <button onClick={() => {
-            const fmtK = n => n >= 1_000_000 ? `${(n/1_000_000).toFixed(2)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : `${n}`;
-            const nwLatest = nwData ? [...nwData].sort((a,b) => a.month.localeCompare(b.month)).at(-1) : null;
-            const defiTotal2 = DEFI_WEEKS.reduce((s,w) => s+w.tasks.length, 0);
-            const defiDone2 = Object.values(defiHw).filter(Boolean).length;
-            const lines = [
-              `📊 *Weekly Report ${today.toLocaleDateString("ru-RU")}*`,
-              ``,
-              nwLatest ? `💰 Networth: *$${Math.round(nwLatest.nwUsd/1000)}K*` : null,
-              `📚 DeFi домашка: *${defiDone2}/${defiTotal2}* (${Math.round(defiDone2/defiTotal2*100)}%)`,
-              wayCapital > 0 ? `🚀 Цель $1M: *$${Math.round(wayCapital).toLocaleString()}*` : null,
-              claudeStats ? `🤖 Claude токены (7д): *${fmtK(claudeStats.total)}* всего` : null,
-              aiStats ? `📱 TG бот (7д): *${fmtK(aiStats.week7)}* токенов` : null,
-            ].filter(Boolean).join("\n");
-            const url = `https://t.me/${TG_BOT_USERNAME}?text=${encodeURIComponent(lines)}`;
-            window.open(url, "_blank");
-            setTgSent(true);
-            setTimeout(() => setTgSent(false), 3000);
-          }} style={{ background: tgSent ? "rgba(118,255,3,0.1)" : "rgba(124,92,252,0.1)", border: `1px solid ${tgSent ? "rgba(118,255,3,0.3)" : "rgba(124,92,252,0.3)"}`, borderRadius: 8, color: tgSent ? "#4ADE80" : "#7C5CFC", fontSize: 12, fontWeight: 600, padding: "8px 16px", cursor: "pointer", transition: "all 0.2s" }}>
-            {tgSent ? "✓ Открыт TG" : "↗ Отправить в TG"}
-          </button>
-        </div>
-      </div>
-
-      {/* Networth */}
-      {latest && (
-        <Section title="NETWORTH" color="#4ADE80">
-          <Row label={`Капитал (${fmtM(latest.month)})`} val={`$${Math.round(latest.nwUsd / 1000)}K`} color="#4ADE80" />
-          {nwDelta !== 0 && <Row label="Изменение vs прошлый месяц" val={`${nwDelta > 0 ? "+" : ""}$${Math.round(nwDelta / 1000)}K`} sub={nwPct ? `(${nwPct}%)` : ""} color={nwDelta > 0 ? "#4ADE80" : "#FF6450"} />}
-          <Row label="Рублей" val={`₽${(latest.nwRub / 1_000_000).toFixed(2)}M`} />
-        </Section>
-      )}
-
-      {/* DeFi */}
-      <Section title="CRYPTO · DEFI" color="#00E5FF">
-        <Row label="В работе" val={defiCur > 0 ? `$${defiCur.toLocaleString()}` : "—"} />
-        <Row label="P&L" val={defiPnl !== 0 ? `${defiPnl > 0 ? "+" : ""}$${defiPnl.toFixed(0)}` : "—"} color={defiPnl > 0 ? "#4ADE80" : defiPnl < 0 ? "#FF6450" : C.muted} />
-        <Row label="Домашка всего" val={`${defiDone}/${defiTotal}`} sub={`${defiPct}%`} color="#00E5FF" />
-        <Bar pct={defiPct} color="#00E5FF" />
-        {currentWeek && (
-          <Row label={`Неделя ${currentWeek.week}: ${currentWeek.title}`} val={`${weekDone}/${weekTotal}`} color={weekDone === weekTotal ? "#4ADE80" : "#00E5FF"} />
-        )}
-      </Section>
-
-      {/* Цель $1M */}
-      <Section title="ЦЕЛЬ $1M" color="#FFD700">
-        <Row label="Капитал" val={`$${Math.round(wayCapital).toLocaleString()}`} color="#FFD700" />
-        <Row label="До цели" val={`${wayPct.toFixed(2)}%`} />
-        <Bar pct={wayPct} color="#FFD700" />
-        <Row label="Задач выполнено" val={`${wayDone}/${(wayData.tasks || []).length}`} />
-      </Section>
-
-      {/* Wishlist */}
-      <Section title="WISHLIST" color="#7C5CFC">
-        <Row label="Выполнено" val={`${wishDone}/${wishTotal}`} sub={`${Math.round((wishDone/wishTotal)*100)}%`} color="#7C5CFC" />
-        <Bar pct={(wishDone/wishTotal)*100} color="#7C5CFC" />
-        {WISH_CATEGORIES.map(cat => {
-          const done = cat.items.filter((_, i) => wishState[cat.id]?.[i]?.done).length;
-          return done > 0 ? (
-            <Row key={cat.id} label={`${cat.icon} ${cat.title}`} val={`${done}/${cat.items.length}`} color={done === cat.items.length ? "#4ADE80" : C.text} />
-          ) : null;
-        })}
-      </Section>
-
-      {/* AI */}
-      {(claudeStats || aiStats) && (
-        <Section title="AI · ТОКЕНЫ ЗА 7 ДНЕЙ" color="#D97706">
-          {claudeWeekTokens > 0 && <Row label="Claude Code" val={fmtK(claudeWeekTokens)} color="#D97706" />}
-          {aiStats && <Row label={`TG Бот (${aiStats.activeModel})`} val={fmtK(aiStats.week7)} color="#7C5CFC" />}
-          {claudeStats && <Row label="Claude всего" val={fmtK(claudeStats.total)} />}
-        </Section>
-      )}
-
-      {/* AI Projects */}
-      <Section title="AI ПРОЕКТЫ · АКТИВНОСТЬ ЗА 7 ДНЕЙ" color="#FF9800">
-        {AI_PROJECTS.map(p => {
-          const d = ghData[p.repo];
-          const daysAgo = d?.lastPush ? Math.floor((Date.now() - new Date(d.lastPush)) / 86400000) : null;
-          const freshness = daysAgo === null ? null : daysAgo === 0 ? "сегодня" : daysAgo === 1 ? "вчера" : `${daysAgo}д назад`;
-          return (
-            <div key={p.repo} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: d?.commits7d > 0 ? p.color : C.muted, flexShrink: 0 }} />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: p.color }}>{p.label}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>{p.desc}</span>
-                </div>
-                {freshness && <span style={{ fontSize: 11, color: C.muted }}>{freshness}</span>}
-              </div>
-              <div style={{ display: "flex", gap: 20, paddingLeft: 15 }}>
-                <div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: d?.commits7d > 0 ? p.color : C.muted }}>{d ? d.commits7d : "—"}</div>
-                  <div style={{ fontSize: 11, color: C.muted }}>коммитов</div>
-                </div>
-                {d?.openIssues != null && (
-                  <div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: d.openIssues > 0 ? "#FFD700" : C.muted }}>{d.openIssues}</div>
-                    <div style={{ fontSize: 11, color: C.muted }}>открытых issues</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>данные из GitHub · обновляются при открытии страницы</div>
-      </Section>
-    </div>
-  );
-}
-
 const navItems = [
   { to: "/defi",      label: "Crypto",    color: "#00E5FF" },
   { to: "/wishlist",  label: "Wishlist",  color: "#7C5CFC" },
@@ -2980,7 +2775,7 @@ function AppInner() {
     <Shell accent={accent} syncStatus={syncStatus}>
       <Routes>
         <Route path="/" element={<Overview wishState={wishState} defiPositions={defiPositions} defiHw={hwChecked} wayData={wayData} nwData={nwData} onNavigate={(id) => {
-                const map = { home: "/", wishes: "/wishlist", defi: "/defi", way: "/way", networth: "/networth", weekly: "/weekly" };
+                const map = { home: "/", wishes: "/wishlist", defi: "/defi", way: "/way", networth: "/networth" };
                 navigate(map[id] ?? `/${id}`);
               }} />} />
         <Route path="/way" element={<Navigate to="/networth" replace />} />
@@ -2988,7 +2783,6 @@ function AppInner() {
         <Route path="/defi" element={<Navigate to="/defi/portfolio" replace />} />
         <Route path="/defi/:tab" element={<DefiDashboard positions={defiPositions} setPositions={setDefiPositions} hwChecked={hwChecked} setHwChecked={setHwChecked} />} />
         <Route path="/networth" element={<NetWorthDashboard nwData={nwData} setNwData={setNwData} wayData={wayData} setWayData={setWayData} />} />
-        <Route path="/weekly" element={<WeeklyReport wishState={wishState} defiPositions={defiPositions} defiHw={hwChecked} wayData={wayData} nwData={nwData} />} />
         <Route path="/setup" element={<SetupDashboard />} />
       </Routes>
     </Shell>
