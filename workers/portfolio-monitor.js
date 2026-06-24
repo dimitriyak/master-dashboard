@@ -109,6 +109,20 @@ async function runAlerts(env) {
     return { ok: true, note: "baseline set, no alerts" };
   }
 
+  // Предыдущий снимок (прошлый прогон, каждые 30 мин) — для подтверждения свинга.
+  // Разовый разрыв в данных (не подтянулась позиция/саб-займ) даёт ложное «падение»;
+  // алертим только если просадка/рост держится ДВА снимка подряд относительно baseline.
+  const prev = await env.STATE.get(`last`, "json");
+  // true только если и текущий, и предыдущий замер пробили порог в ОДНУ сторону.
+  const swingConfirmed = (curV, baseV, prevV) => {
+    if (Math.abs(baseV) <= 5) return false;
+    const dp = (curV - baseV) / Math.abs(baseV) * 100;
+    if (Math.abs(dp) < SWING_PCT) return false;
+    if (prevV == null) return false;                  // нет с чем сверять → ждём след. снимок
+    const pp = (prevV - baseV) / Math.abs(baseV) * 100;
+    return Math.abs(pp) >= SWING_PCT && Math.sign(pp) === Math.sign(dp);
+  };
+
   const sent = new Set((await env.STATE.get(`sent:${day}`, "json")) || []);
   const alerts = [];
   const add = (key, text) => { if (!sent.has(key)) { alerts.push(text); sent.add(key); } };
@@ -137,18 +151,22 @@ async function runAlerts(env) {
     if (!b) { add(`new-${id}`, `🆕 <b>Новая позиция</b>\n${c.name}: $${c.usd.toFixed(0)}`); continue; }
     if (Math.abs(b.usd) > 5) {
       const dpct = (c.usd - b.usd) / Math.abs(b.usd) * 100;
-      if (Math.abs(dpct) >= SWING_PCT) add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}`);
+      if (swingConfirmed(c.usd, b.usd, prev?.pos?.[id]?.usd ?? null))
+        add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}`);
     }
     if (b.apy != null && c.apy != null && Math.abs(c.apy - b.apy) >= APY_DELTA)
       add(`apy-${id}`, `📊 <b>${c.name}: APY ${c.apy > b.apy ? "вырос" : "упал"}</b>\n${b.apy.toFixed(1)}% → ${c.apy.toFixed(1)}%`);
   }
   for (const id of Object.keys(baseline.pos)) {
-    if (!cur.pos[id]) add(`gone-${id}`, `❎ <b>Позиция закрыта</b>\n${baseline.pos[id].name}`);
+    // «закрыта» только если позиция отсутствует и в текущем, и в прошлом снимке —
+    // иначе это разовый разрыв загрузки, а не реальное закрытие.
+    if (!cur.pos[id] && prev && !prev.pos?.[id]) add(`gone-${id}`, `❎ <b>Позиция закрыта</b>\n${baseline.pos[id].name}`);
   }
   // total swing
   if (Math.abs(baseline.total) > 5) {
     const dpct = (cur.total - baseline.total) / Math.abs(baseline.total) * 100;
-    if (Math.abs(dpct) >= SWING_PCT) add("swing-total", `${dpct >= 0 ? "📈" : "📉"} <b>Портфель ${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день</b>\n$${baseline.total.toFixed(0)} → $${cur.total.toFixed(0)}`);
+    if (swingConfirmed(cur.total, baseline.total, prev?.total ?? null))
+      add("swing-total", `${dpct >= 0 ? "📈" : "📉"} <b>Портфель ${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день</b>\n$${baseline.total.toFixed(0)} → $${cur.total.toFixed(0)}`);
   }
 
   // 4) Stablecoin depeg (real USDC price)
