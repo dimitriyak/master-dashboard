@@ -2318,33 +2318,65 @@ function UsageStrip() {
   );
 }
 
-// Стоимость всех платных ресурсов/мес. Суммы редактируются и синхронизируются (ключ resources_cost).
+// Срок до даты: дни и цвет (красный <7, жёлтый <30, иначе серо-зелёный).
+function renewInfo(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr + "T00:00:00");
+  if (isNaN(target)) return null;
+  const days = Math.ceil((target - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00")) / 86400000);
+  const color = days < 0 ? "#FF6450" : days <= 7 ? "#FF6450" : days <= 30 ? "#FFD700" : "#4ADE80";
+  const dd = target.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  const label = days < 0 ? `просрочено ${dd}` : days === 0 ? `сегодня ${dd}` : `${dd} · ${days} дн`;
+  return { color, label, days };
+}
+
+// Стоимость всех платных ресурсов/мес + сроки продления/сгорания и оплаченный объём (% использовано).
+// Суммы/даты/лимиты редактируются и синхронизируются (ключ resources_cost).
 function ResourcesCard() {
   const [cfg, setCfg] = useState(RESOURCES_DEFAULT);
   const [edit, setEdit] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [live, setLive] = useState({}); // { claude: tokensTotal, vertex: tokensTotal }
 
   useEffect(() => {
     cloudGet("resources_cost").then(v => {
       if (v?.items) {
-        // мерж: новые ресурсы из дефолта добавляем, цены берём из облака
-        const saved = new Map(v.items.map(i => [i.id, i.usd]));
-        setCfg({ rub: v.rub ?? RESOURCES_DEFAULT.rub, items: RESOURCES_DEFAULT.items.map(d => ({ ...d, usd: saved.has(d.id) ? saved.get(d.id) : d.usd })) });
+        // мерж: новые ресурсы из дефолта добавляем, сохранённые поля берём из облака
+        const saved = new Map(v.items.map(i => [i.id, i]));
+        setCfg({ rub: v.rub ?? RESOURCES_DEFAULT.rub, items: RESOURCES_DEFAULT.items.map(d => ({ ...d, ...(saved.get(d.id) || {}) })) });
       }
       setLoaded(true);
     }).catch(() => setLoaded(true));
   }, []);
 
-  const save = (next) => { setCfg(next); cloudSet("resources_cost", { rub: next.rub, items: next.items.map(({ id, usd }) => ({ id, usd })) }); };
-  const setUsd = (id, usd) => save({ ...cfg, items: cfg.items.map(i => i.id === id ? { ...i, usd } : i) });
+  // живой usage токенов: Claude (подписка) и бот через Vertex
+  useEffect(() => {
+    const load = () => {
+      fetch(`${SYNC_URL}/sync/claude_usage`, { headers: { Authorization: `Bearer ${SYNC_TOKEN}` } })
+        .then(r => r.json()).then(d => setLive(p => ({ ...p, claude: d.value?.total }))).catch(() => {});
+      fetch(`${AI_STATS_URL}/stats`).then(r => r.json()).then(d => setLive(p => ({ ...p, vertex: d.total }))).catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const save = (next) => { setCfg(next); cloudSet("resources_cost", { rub: next.rub, items: next.items.map(({ id, usd, renews, limit, unit, used }) => ({ id, usd, renews, limit, unit, used })) }); };
+  const setField = (id, patch) => save({ ...cfg, items: cfg.items.map(i => i.id === id ? { ...i, ...patch } : i) });
   const setRub = (rub) => save({ ...cfg, rub });
 
   const totalUsd = cfg.items.reduce((s, i) => s + (Number(i.usd) || 0), 0);
   const groups = [...new Set(cfg.items.map(i => i.group))];
   const liveDot = { claude: "#D97706", deepseek: "#25BCFE" };
 
+  // использовано для %: живой usage где есть, иначе ручное поле used
+  const usedOf = (it) => {
+    const liveVal = it.unit === "tok" ? live[it.id] : undefined;
+    return Number(liveVal != null ? liveVal : it.used) || 0;
+  };
+
   return (
-    <SetupCard title="Платные ресурсы · стоимость/мес" accent="#FFD700">
+    <SetupCard title="Платные ресурсы · стоимость, сроки, лимиты" accent="#FFD700">
       {/* Итог */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
         <span style={{ fontSize: 28, fontWeight: 800, color: "#FFD700" }}>${totalUsd.toFixed(0)}</span>
@@ -2354,7 +2386,7 @@ function ResourcesCard() {
         </button>
       </div>
       <div style={{ fontSize: 11, color: C.muted, marginBottom: 16 }}>
-        точный биллинг GCP/Cloudflare недоступен из браузера — суммы вводятся вручную{edit && <> · курс ₽/$ <input type="number" value={cfg.rub} onChange={e => setRub(parseFloat(e.target.value) || 0)} style={{ width: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, padding: "2px 6px", marginLeft: 4 }} /></>}
+        точный биллинг GCP/Cloudflare недоступен из браузера — суммы/даты/лимиты вводятся вручную · токены Claude и бота (Vertex) подтягиваются живьём{edit && <> · курс ₽/$ <input type="number" value={cfg.rub} onChange={e => setRub(parseFloat(e.target.value) || 0)} style={{ width: 48, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, padding: "2px 6px", marginLeft: 4 }} /></>}
       </div>
 
       {groups.map(g => {
@@ -2366,29 +2398,85 @@ function ResourcesCard() {
               <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>{g}</span>
               <span style={{ fontSize: 11, color: C.muted }}>${sub.toFixed(0)}/мес</span>
             </div>
-            {items.map(it => (
-              <div key={it.id} title={it.note || ""} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${C.border}` }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: it.color, flexShrink: 0 }} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, color: C.text, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                    {it.name}
-                    {it.live && <span title="есть живые данные usage" style={{ width: 5, height: 5, borderRadius: "50%", background: liveDot[it.live] || "#4ADE80", boxShadow: `0 0 5px ${liveDot[it.live] || "#4ADE80"}` }} />}
+            {items.map(it => {
+              const ren = renewInfo(it.renews);
+              const lim = Number(it.limit) || 0;
+              const used = usedOf(it);
+              const isTok = it.unit === "tok";
+              const pct = lim > 0 ? Math.min(100, Math.round((used / lim) * 100)) : null;
+              const pctColor = pct == null ? C.muted : pct >= 90 ? "#FF6450" : pct >= 70 ? "#FFD700" : "#4ADE80";
+              const liveUsed = isTok && live[it.id] != null;
+              return (
+                <div key={it.id} title={it.note || ""} style={{ padding: "8px 0", borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: it.color, flexShrink: 0 }} />
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13, color: C.text, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                        {it.name}
+                        {it.live && <span title="есть живые данные usage" style={{ width: 5, height: 5, borderRadius: "50%", background: liveDot[it.live] || "#4ADE80", boxShadow: `0 0 5px ${liveDot[it.live] || "#4ADE80"}` }} />}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.plan}</div>
+                    </div>
+                    {!edit && ren && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: ren.color, background: ren.color + "1A", border: `1px solid ${ren.color}44`, borderRadius: 100, padding: "2px 8px", flexShrink: 0 }}>{ren.label}</span>
+                    )}
+                    {edit ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+                        <span style={{ fontSize: 12, color: C.muted }}>$</span>
+                        <input type="number" value={it.usd} onChange={e => setField(it.id, { usd: parseFloat(e.target.value) || 0 })}
+                          style={{ width: 56, background: C.surface, border: `1px solid ${it.color}55`, borderRadius: 6, color: C.text, fontSize: 13, padding: "3px 6px", textAlign: "right" }} />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 14, fontWeight: 700, color: (Number(it.usd) || 0) > 0 ? C.text : C.muted, flexShrink: 0 }}>
+                        {(Number(it.usd) || 0) > 0 ? `$${it.usd}` : "—"}
+                      </span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 10, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.plan}</div>
+
+                  {/* Прогресс-бар оплаченного объёма */}
+                  {!edit && pct != null && (
+                    <div style={{ marginTop: 6, marginLeft: 18 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginBottom: 3 }}>
+                        <span>{isTok ? `${fmtTok(used)} / ${fmtTok(lim)} ток` : `$${used} / $${lim}`}{liveUsed && <span style={{ color: "#4ADE80" }}> · live</span>}</span>
+                        <span style={{ color: pctColor, fontWeight: 700 }}>{pct}%</span>
+                      </div>
+                      <div style={{ height: 5, borderRadius: 3, background: C.border, overflow: "hidden" }}>
+                        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 3, background: pctColor }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Поля редактирования: дата + лимит + (used если нет live) */}
+                  {edit && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6, marginLeft: 18, alignItems: "center" }}>
+                      <label style={{ fontSize: 10, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+                        срок
+                        <input type="date" value={it.renews || ""} onChange={e => setField(it.id, { renews: e.target.value })}
+                          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, padding: "2px 6px" }} />
+                      </label>
+                      <label style={{ fontSize: 10, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+                        объём
+                        <input type="number" value={it.limit || 0} onChange={e => setField(it.id, { limit: parseFloat(e.target.value) || 0 })}
+                          style={{ width: 80, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, padding: "2px 6px", textAlign: "right" }} />
+                        <select value={it.unit || "$"} onChange={e => setField(it.id, { unit: e.target.value })}
+                          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, padding: "2px 4px" }}>
+                          <option value="$">$</option>
+                          <option value="tok">ток</option>
+                        </select>
+                      </label>
+                      {!liveUsed && (
+                        <label style={{ fontSize: 10, color: C.muted, display: "flex", alignItems: "center", gap: 4 }}>
+                          исп.
+                          <input type="number" value={it.used || 0} onChange={e => setField(it.id, { used: parseFloat(e.target.value) || 0 })}
+                            style={{ width: 80, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, fontSize: 11, padding: "2px 6px", textAlign: "right" }} />
+                        </label>
+                      )}
+                      {liveUsed && <span style={{ fontSize: 10, color: "#4ADE80" }}>исп. — live {fmtTok(used)}</span>}
+                    </div>
+                  )}
                 </div>
-                {edit ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
-                    <span style={{ fontSize: 12, color: C.muted }}>$</span>
-                    <input type="number" value={it.usd} onChange={e => setUsd(it.id, parseFloat(e.target.value) || 0)}
-                      style={{ width: 60, background: C.surface, border: `1px solid ${it.color}55`, borderRadius: 6, color: C.text, fontSize: 13, padding: "3px 6px", textAlign: "right" }} />
-                  </div>
-                ) : (
-                  <span style={{ fontSize: 14, fontWeight: 700, color: (Number(it.usd) || 0) > 0 ? C.text : C.muted, flexShrink: 0 }}>
-                    {(Number(it.usd) || 0) > 0 ? `$${it.usd}` : "—"}
-                  </span>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       })}
