@@ -86,9 +86,42 @@ async function sendTelegram(env, html) {
 const posVal = p => p.usdValue ?? (p.type !== "lp" ? p.balance : 0) ?? 0;
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Symbol → CoinGecko id, чтобы объяснять причину свинга движением токенов пары.
+const CG_ID = {
+  WETH: "weth", ETH: "ethereum", WBTC: "wrapped-bitcoin", BTC: "bitcoin",
+  USDC: "usd-coin", USDT: "tether", AERO: "aerodrome-finance", VVV: "venice-token",
+  WBERA: "wrapped-bera", BERA: "berachain-bera",
+};
+
+// 24h-изменение цены (%) по символам токенов одним запросом к DeFiLlama.
+async function tokenChanges(symbols) {
+  const ids = [...new Set(symbols)].map(s => CG_ID[s]).filter(Boolean);
+  if (!ids.length) return {};
+  const q = ids.map(id => `coingecko:${id}`).join(",");
+  const r = await tfetch(`https://coins.llama.fi/percentage/${q}?period=24h`).then(r => r.json()).catch(() => null);
+  const out = {};
+  for (const s of new Set(symbols)) {
+    const v = CG_ID[s] ? r?.coins?.[`coingecko:${CG_ID[s]}`] : null;
+    if (typeof v === "number") out[s] = v;
+  }
+  return out;
+}
+
+// Токены позиции: «WETH/VVV» → [WETH, VVV], «USDC» → [USDC].
+const assetTokens = asset => String(asset || "").split("/").map(t => t.trim()).filter(Boolean);
+
+// Строка-причина: движение токенов пары за 24ч, по убыванию модуля.
+function reasonLine(asset, changes) {
+  const parts = assetTokens(asset)
+    .filter(t => changes[t] != null)
+    .sort((a, b) => Math.abs(changes[b]) - Math.abs(changes[a]))
+    .map(t => `${t} ${changes[t] >= 0 ? "+" : ""}${changes[t].toFixed(1)}%`);
+  return parts.length ? `\n↳ ${parts.join(" · ")} за 24ч` : "";
+}
+
 function snapshot(data) {
   const pos = {};
-  for (const p of data.positions) pos[p.id] = { usd: posVal(p), apy: p.apy ?? null, name: `${p.protocol} ${p.asset}` };
+  for (const p of data.positions) pos[p.id] = { usd: posVal(p), apy: p.apy ?? null, name: `${p.protocol} ${p.asset}`, asset: p.asset };
   const total = data.positions.reduce((s, p) => s + posVal(p), 0);
   return { ts: Date.now(), total, pos };
 }
@@ -146,13 +179,17 @@ async function runAlerts(env) {
   }
 
   // 3) Swings & APY vs daily baseline; new/removed positions
+  // 24h-движение токенов всех позиций — чтобы к свингу приписать причину.
+  const changes = await tokenChanges(
+    Object.values(cur.pos).flatMap(c => assetTokens(c.asset))
+  );
   for (const [id, c] of Object.entries(cur.pos)) {
     const b = baseline.pos[id];
     if (!b) { add(`new-${id}`, `🆕 <b>Новая позиция</b>\n${c.name}: $${c.usd.toFixed(0)}`); continue; }
     if (Math.abs(b.usd) > 5) {
       const dpct = (c.usd - b.usd) / Math.abs(b.usd) * 100;
       if (swingConfirmed(c.usd, b.usd, prev?.pos?.[id]?.usd ?? null))
-        add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}`);
+        add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}${reasonLine(c.asset, changes)}`);
     }
     if (b.apy != null && c.apy != null && Math.abs(c.apy - b.apy) >= APY_DELTA)
       add(`apy-${id}`, `📊 <b>${c.name}: APY ${c.apy > b.apy ? "вырос" : "упал"}</b>\n${b.apy.toFixed(1)}% → ${c.apy.toFixed(1)}%`);
