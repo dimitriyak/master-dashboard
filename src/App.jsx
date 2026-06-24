@@ -1023,6 +1023,39 @@ function PortfolioChart() {
   );
 }
 
+// Сколько суммарно потрачено на газ/комиссии по on-chain транзакциям кошелька.
+function GasCard() {
+  const [gas, setGas] = useState(null);
+  useEffect(() => {
+    fetch(`${PORTFOLIO_MONITOR_URL}?run=gas`).then(r => r.json()).then(setGas).catch(() => setGas({ error: true }));
+  }, []);
+  if (!gas || gas.error || !gas.byChain) return null;
+  const chains = gas.byChain.filter(c => c.txs > 0).sort((a, b) => b.usd - a.usd);
+
+  return (
+    <div className="page-pad-sm" style={{ paddingTop: 4, paddingBottom: 4 }}>
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 10, color: C.muted, letterSpacing: "0.14em", fontWeight: 600 }}>⛽ ГАЗ / КОМИССИИ</span>
+          <span style={{ fontSize: 10, color: C.muted }}>{gas.totalTxs} tx</span>
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: "#FF9F45", lineHeight: 1, marginBottom: 10 }}>
+          ${gas.totalUsd.toLocaleString("en-US", { maximumFractionDigits: gas.totalUsd < 100 ? 2 : 0 })}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 6 }}>
+          {chains.map(c => (
+            <div key={c.chain} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}>
+              <span style={{ color: C.muted }}>{c.chain} <span style={{ opacity: 0.6 }}>· {c.txs}</span></span>
+              <b style={{ color: C.text, flexShrink: 0 }}>${c.usd < 100 ? c.usd.toFixed(2) : c.usd.toFixed(0)}</b>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 9, color: C.muted, marginTop: 8, opacity: 0.7 }}>по текущим ценам токенов</div>
+      </div>
+    </div>
+  );
+}
+
 function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const { tab = "portfolio" } = useParams();
   const navigate = useNavigate();
@@ -1435,6 +1468,8 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
       )}
 
       <PortfolioChart />
+
+      <GasCard />
 
       <div style={{ padding: "14px 28px 6px" }}>
         <span style={{ fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>DeFi</span>

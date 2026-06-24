@@ -212,11 +212,63 @@ async function getHistory(env, days = 0) {
   return entries.filter(Boolean);
 }
 
+// ── Gas / fees spent (on-chain tx fees for the main EVM wallet) ────────────────
+// Считаем gasUsed×gasPrice по всем исходящим транзакциям кошелька на каждой сети
+// (платим газ только за свои tx). Источники keyless: Blockscout + Routescan.
+// Тяжёлый запрос → кешируем в KV `gas:cache`, пересчёт раз в день из дайджеста.
+const GAS_WALLET = "0x2d80f9bef9da5bc0c011d7239d31997528216aec";
+const GAS_SOURCES = [
+  { chain: "Base",      token: "ETH",  price: "coingecko:ethereum",       api: "https://base.blockscout.com/api" },
+  { chain: "Ethereum",  token: "ETH",  price: "coingecko:ethereum",       api: "https://eth.blockscout.com/api" },
+  { chain: "Arbitrum",  token: "ETH",  price: "coingecko:ethereum",       api: "https://arbitrum.blockscout.com/api" },
+  { chain: "Berachain", token: "BERA", price: "coingecko:berachain-bera", api: "https://api.routescan.io/v2/network/mainnet/evm/80094/etherscan/api" },
+];
+
+async function priceOf(id) {
+  const r = await tfetch(`https://coins.llama.fi/prices/current/${id}`).then(r => r.json()).catch(() => null);
+  return r?.coins?.[id]?.price || 0;
+}
+
+async function chainGas(src) {
+  const url = `${src.api}?module=account&action=txlist&address=${GAS_WALLET}&page=1&offset=10000&sort=asc`;
+  const d = await tfetch(url, {}, 15000).then(r => r.json()).catch(() => null);
+  const list = Array.isArray(d?.result) ? d.result : [];
+  let wei = 0n, txs = 0;
+  for (const t of list) {
+    if ((t.from || "").toLowerCase() !== GAS_WALLET) continue;     // газ платит только отправитель
+    wei += BigInt(t.gasUsed || "0") * BigInt(t.gasPrice || "0");
+    txs++;
+  }
+  const native = Number(wei / 1_000_000_000n) / 1e9;               // wei → токен без потери точности
+  return { chain: src.chain, token: src.token, native, txs, capped: list.length >= 10000, priceId: src.price };
+}
+
+async function computeGas(env) {
+  const parts = await Promise.all(GAS_SOURCES.map(s =>
+    chainGas(s).catch(() => ({ chain: s.chain, token: s.token, native: 0, txs: 0, capped: false, priceId: s.price }))));
+  const priceCache = {};
+  for (const p of parts) {
+    if (priceCache[p.priceId] == null) priceCache[p.priceId] = await priceOf(p.priceId);
+    p.usd = p.native * priceCache[p.priceId];
+    delete p.priceId;
+  }
+  const result = {
+    ts: Date.now(),
+    totalUsd: parts.reduce((s, p) => s + p.usd, 0),
+    totalTxs: parts.reduce((s, p) => s + p.txs, 0),
+    byChain: parts,
+    note: "USD по текущим ценам нативного токена",
+  };
+  await env.STATE.put("gas:cache", JSON.stringify(result));
+  return result;
+}
+
 // ── Daily AI digest ─────────────────────────────────────────────────────────
 async function runDigest(env) {
   const [data, bybit] = await Promise.all([getPortfolio(env), getBybit(env)]);
   if (!data) return { ok: false, error: "no portfolio data" };
   await recordHistory(env, { data, bybit }).catch(() => {});
+  await computeGas(env).catch(() => {});
 
   const lines = data.positions
     .filter(p => Math.abs(posVal(p)) >= 1)
@@ -277,7 +329,13 @@ export default {
       if (!data) return json({ ok: false, error: "no portfolio data" });
       return json(await recordHistory(env, { data, bybit }));
     }
-    return json({ ok: true, hint: "use ?run=test | ?run=alerts | ?run=digest | ?run=history[&days=N] | ?run=snapshot" });
+    if (run === "gas") {
+      const fresh = new URL(req.url).searchParams.get("fresh");
+      let g = fresh ? null : await env.STATE.get("gas:cache", "json");
+      if (!g) g = await computeGas(env);
+      return json(g, 200, true);
+    }
+    return json({ ok: true, hint: "use ?run=test | ?run=alerts | ?run=digest | ?run=history[&days=N] | ?run=snapshot | ?run=gas[&fresh=1]" });
   },
 };
 
