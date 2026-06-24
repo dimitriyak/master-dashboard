@@ -213,6 +213,37 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
         );
       })()}
 
+      {/* Crypto mini-card */}
+      {(() => {
+        if (!defiPositions.length) return null;
+        const pct = defiAllocated ? ((defiPnl / defiAllocated) * 100).toFixed(1) : null;
+        const CC = "#00E5FF";
+        return (
+          <button onClick={() => onNavigate("defi")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: "16px 20px", marginBottom: 28, cursor: "pointer", width: "100%", textAlign: "left", transition: "border-color 0.2s" }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = `${CC}59`}
+            onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+          >
+            <div>
+              <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 4 }}>CRYPTO · ПОРТФЕЛЬ</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 22, fontWeight: 700, color: CC }}>${Math.round(defiCurrent).toLocaleString()}</span>
+                {defiPnl !== 0 && pct && (
+                  <span style={{ fontSize: 12, color: defiPnl > 0 ? "#4ADE80" : "#FF6450" }}>
+                    {defiPnl > 0 ? "+" : ""}${Math.round(defiPnl).toLocaleString()} ({pct}%)
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                Вложено: <span style={{ color: C.text }}>${Math.round(defiAllocated).toLocaleString()}</span>
+                {bybitBalance != null && <span style={{ marginLeft: 8 }}>Bybit <span style={{ color: C.text }}>${Math.round(bybitBalance).toLocaleString()}</span></span>}
+              </div>
+            </div>
+            <span style={{ fontSize: 22, flexShrink: 0 }}>₿</span>
+          </button>
+        );
+      })()}
+
       {/* AI Stats */}
       {(aiStats || claudeStats) && (() => {
         const fmtK = n => n >= 1_000_000 ? `${(n/1_000_000).toFixed(2)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : `${n}`;
@@ -320,55 +351,6 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
                 </div>
               )}
 
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Today's log entries from Way */}
-      {(() => {
-        const todayStr = new Date().toLocaleDateString("ru-RU");
-        const todayLogs = (wayData?.log || []).filter(e => e.date?.startsWith(todayStr));
-        if (!todayLogs.length) return null;
-        return (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: "16px 20px", marginBottom: 28 }}>
-            <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 12 }}>СЕГОДНЯ СДЕЛАНО</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {todayLogs.map(e => (
-                <div key={e.id} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#FFD700", flexShrink: 0, marginTop: 6 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, color: C.text, lineHeight: 1.4 }}>{e.text}</div>
-                    <div style={{ fontSize: 11, color: C.muted }}>{e.date?.split(" ")[1] || ""}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Focus list */}
-      {(() => {
-        const items = [
-          defiNextTask   ? { label: "Crypto",   text: defiNextTask,          color: "#00E5FF", id: "defi" } : null,
-          wayNextTask    ? { label: "Цель $1M", text: wayNextTask.text,      color: "#FFD700", id: "networth" } : null,
-          wishNextTask   ? { label: "Wishlist", text: typeof wishNextTask === "string" ? wishNextTask : wishNextTask, color: "#7C5CFC", id: "wishes" } : null,
-        ].filter(Boolean).slice(0, 3);
-        if (!items.length) return null;
-        return (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, padding: "16px 20px", marginBottom: 28 }}>
-            <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 12 }}>СЛЕДУЮЩИЕ ШАГИ</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {items.map((item, i) => (
-                <button key={i} onClick={() => onNavigate(item.id)} style={{ display: "flex", alignItems: "center", gap: 12, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
-                  <div style={{ width: 3, height: 36, borderRadius: 2, background: item.color, flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontSize: 10, color: item.color, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 2 }}>{item.label}</div>
-                    <div style={{ fontSize: 14, color: C.text, lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>{item.text}</div>
-                  </div>
-                </button>
-              ))}
             </div>
           </div>
         );
