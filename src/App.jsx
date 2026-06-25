@@ -102,6 +102,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
     const h = (() => { try { return JSON.parse(localStorage.getItem("bybit_history")) || []; } catch { return []; } })();
     return h.length ? h[h.length - 1].balance : null;
   });
+  const [liveDefiCurrent, setLiveDefiCurrent] = useState(null);
   useEffect(() => {
     fetch(`${AI_STATS_URL}/stats`).then(r => r.json()).then(setAiStats).catch(() => {});
     fetch(`${SYNC_URL}/sync/claude_usage`, { headers: { Authorization: `Bearer ${SYNC_TOKEN}` } })
@@ -109,6 +110,13 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
     fetch(BYBIT_PROXY_URL).then(r => r.json()).then(d => {
       const eq = parseFloat(d?.result?.list?.[0]?.totalEquity);
       if (!isNaN(eq)) setBybitBalance(eq);
+    }).catch(() => {});
+    // Живой DeFi-тотал прямо из воркера — чтобы не зависеть от кэша current,
+    // который обновляется только при заходе на страницу DeFi.
+    fetch(DEFI_PORTFOLIO_URL).then(r => r.json()).then(d => {
+      if (!Array.isArray(d?.positions)) return;
+      const posVal = p => p.usdValue ?? (p.type !== "lp" ? p.balance : 0) ?? 0;
+      setLiveDefiCurrent(d.positions.reduce((s, p) => s + posVal(p), 0));
     }).catch(() => {});
   }, []);
   const wishTotal = WISH_CATEGORIES.reduce((s, c) => s + c.items.length, 0);
@@ -216,8 +224,10 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
       {/* Crypto mini-card */}
       {(() => {
         if (!defiPositions.length) return null;
-        const pct = defiAllocated ? ((defiPnl / defiAllocated) * 100).toFixed(1) : null;
-        const cryptoTotal = defiCurrent + (bybitBalance ?? 0); // общий тотал: DeFi + Bybit
+        const defiNow = liveDefiCurrent ?? defiCurrent; // живой тотал, фолбэк на кэш
+        const dPnl = defiNow - defiAllocated;
+        const pct = defiAllocated ? ((dPnl / defiAllocated) * 100).toFixed(1) : null;
+        const cryptoTotal = defiNow + (bybitBalance ?? 0); // общий тотал: DeFi + Bybit
         const CC = "#00E5FF";
         return (
           <button onClick={() => onNavigate("defi")}
@@ -229,16 +239,15 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
               <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 4 }}>CRYPTO · ПОРТФЕЛЬ</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 22, fontWeight: 700, color: CC }}>${Math.round(cryptoTotal).toLocaleString()}</span>
-                {defiPnl !== 0 && pct && (
-                  <span style={{ fontSize: 12, color: defiPnl > 0 ? "#4ADE80" : "#FF6450" }}>
-                    DeFi {defiPnl > 0 ? "+" : ""}${Math.round(defiPnl).toLocaleString()} ({pct}%)
+                {dPnl !== 0 && pct && (
+                  <span style={{ fontSize: 12, color: dPnl > 0 ? "#4ADE80" : "#FF6450" }}>
+                    DeFi {dPnl > 0 ? "+" : ""}${Math.round(dPnl).toLocaleString()} ({pct}%)
                   </span>
                 )}
               </div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                DeFi <span style={{ color: C.text }}>${Math.round(defiCurrent).toLocaleString()}</span>
+                DeFi <span style={{ color: C.text }}>${Math.round(defiNow).toLocaleString()}</span>
                 {bybitBalance != null && <span style={{ marginLeft: 8 }}>Bybit <span style={{ color: C.text }}>${Math.round(bybitBalance).toLocaleString()}</span></span>}
-                <span style={{ marginLeft: 8 }}>вложено <span style={{ color: C.text }}>${Math.round(defiAllocated).toLocaleString()}</span></span>
               </div>
             </div>
             <span style={{ fontSize: 22, flexShrink: 0 }}>₿</span>
