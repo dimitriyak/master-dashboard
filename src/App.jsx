@@ -217,6 +217,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
       {(() => {
         if (!defiPositions.length) return null;
         const pct = defiAllocated ? ((defiPnl / defiAllocated) * 100).toFixed(1) : null;
+        const cryptoTotal = defiCurrent + (bybitBalance ?? 0); // общий тотал: DeFi + Bybit
         const CC = "#00E5FF";
         return (
           <button onClick={() => onNavigate("defi")}
@@ -227,16 +228,17 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
             <div>
               <div style={{ fontSize: 11, color: C.muted, letterSpacing: "0.1em", marginBottom: 4 }}>CRYPTO · ПОРТФЕЛЬ</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 22, fontWeight: 700, color: CC }}>${Math.round(defiCurrent).toLocaleString()}</span>
+                <span style={{ fontSize: 22, fontWeight: 700, color: CC }}>${Math.round(cryptoTotal).toLocaleString()}</span>
                 {defiPnl !== 0 && pct && (
                   <span style={{ fontSize: 12, color: defiPnl > 0 ? "#4ADE80" : "#FF6450" }}>
-                    {defiPnl > 0 ? "+" : ""}${Math.round(defiPnl).toLocaleString()} ({pct}%)
+                    DeFi {defiPnl > 0 ? "+" : ""}${Math.round(defiPnl).toLocaleString()} ({pct}%)
                   </span>
                 )}
               </div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                Вложено: <span style={{ color: C.text }}>${Math.round(defiAllocated).toLocaleString()}</span>
+                DeFi <span style={{ color: C.text }}>${Math.round(defiCurrent).toLocaleString()}</span>
                 {bybitBalance != null && <span style={{ marginLeft: 8 }}>Bybit <span style={{ color: C.text }}>${Math.round(bybitBalance).toLocaleString()}</span></span>}
+                <span style={{ marginLeft: 8 }}>вложено <span style={{ color: C.text }}>${Math.round(defiAllocated).toLocaleString()}</span></span>
               </div>
             </div>
             <span style={{ fontSize: 22, flexShrink: 0 }}>₿</span>
