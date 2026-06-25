@@ -1137,8 +1137,11 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
           if (data.positions?.length > 0) {
             data.positions.forEach(p => {
               const posId = CHAIN_POS_MAP[p.id];
-              if (posId && p.balance > 0) {
-                updatePosition(posId, { current: p.balance, status: "active" });
+              // У LP-позиций balance — это кол-во LP-токенов, а доллары в usdValue.
+              // Пишем в current именно USD-стоимость, иначе тотал на главной схлопывается.
+              const usd = p.usdValue ?? p.balance;
+              if (posId && usd > 0) {
+                updatePosition(posId, { current: usd, status: "active" });
               }
             });
           }
