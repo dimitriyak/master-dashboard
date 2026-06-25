@@ -103,6 +103,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
     return h.length ? h[h.length - 1].balance : null;
   });
   const [liveDefiCurrent, setLiveDefiCurrent] = useState(null);
+  const [rabbyIdle, setRabbyIdle] = useState(0);
   useEffect(() => {
     fetch(`${AI_STATS_URL}/stats`).then(r => r.json()).then(setAiStats).catch(() => {});
     fetch(`${SYNC_URL}/sync/claude_usage`, { headers: { Authorization: `Bearer ${SYNC_TOKEN}` } })
@@ -117,6 +118,8 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
       if (!Array.isArray(d?.positions)) return;
       const posVal = p => p.usdValue ?? (p.type !== "lp" ? p.balance : 0) ?? 0;
       setLiveDefiCurrent(d.positions.reduce((s, p) => s + posVal(p), 0));
+      // Rabby idle: токены кошелька вне DeFi-позиций — как на странице Crypto.
+      setRabbyIdle((d.walletTokens || []).reduce((s, t) => s + (t.usdValue ?? 0), 0));
     }).catch(() => {});
   }, []);
   const wishTotal = WISH_CATEGORIES.reduce((s, c) => s + c.items.length, 0);
@@ -227,7 +230,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
         const defiNow = liveDefiCurrent ?? defiCurrent; // живой тотал, фолбэк на кэш
         const dPnl = defiNow - defiAllocated;
         const pct = defiAllocated ? ((dPnl / defiAllocated) * 100).toFixed(1) : null;
-        const cryptoTotal = defiNow + (bybitBalance ?? 0); // общий тотал: DeFi + Bybit
+        const cryptoTotal = defiNow + (bybitBalance ?? 0) + rabbyIdle; // общий тотал: DeFi + Bybit + Rabby
         const CC = "#00E5FF";
         return (
           <button onClick={() => onNavigate("defi")}
@@ -248,6 +251,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
               <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
                 DeFi <span style={{ color: C.text }}>${Math.round(defiNow).toLocaleString()}</span>
                 {bybitBalance != null && <span style={{ marginLeft: 8 }}>Bybit <span style={{ color: C.text }}>${Math.round(bybitBalance).toLocaleString()}</span></span>}
+                {rabbyIdle >= 1 && <span style={{ marginLeft: 8 }}>Rabby <span style={{ color: C.text }}>${Math.round(rabbyIdle).toLocaleString()}</span></span>}
               </div>
             </div>
             <span style={{ fontSize: 22, flexShrink: 0 }}>₿</span>
