@@ -855,7 +855,7 @@ function TaskRow({ taskText, taskDesc, isDone, onToggle, isLast }) {
 
 // Движение всего крипто-портфеля во времени + атрибуция «из-за чего +/-».
 // Данные — дневные снапшоты из portfolio-monitor (KV, бессрочно).
-function PortfolioChart() {
+function PortfolioChart({ liveTotal = 0 }) {
   const PERIODS = [
     { key: "7",   label: "Неделя", days: 7 },
     { key: "30",  label: "Месяц",  days: 30 },
@@ -886,7 +886,13 @@ function PortfolioChart() {
 
   const days = PERIODS.find(p => p.key === period).days;
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-  const data = hist.filter(e => e.date >= cutoff);
+  let data = hist.filter(e => e.date >= cutoff);
+  // Последнюю точку синхронизируем с живым «крипто итого»: снапшот в KV пишется
+  // раз в день и без Rabby idle, поэтому иначе хвост графика расходится с тоталом.
+  if (liveTotal > 0 && data.length) {
+    const lastIdx = data.length - 1;
+    data = data.map((e, i) => i === lastIdx ? { ...e, total: liveTotal } : e);
+  }
 
   const Box = ({ children }) => (
     <div className="page-pad-sm" style={{ paddingTop: 4, paddingBottom: 4 }}>
@@ -1427,7 +1433,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         </div>
       )}
 
-      <PortfolioChart />
+      <PortfolioChart liveTotal={(bybit?.totalEquity ?? 0) + liveTotal + rabbyIdle} />
 
       <div style={{ padding: "14px 28px 6px" }}>
         <span style={{ fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>DeFi</span>
