@@ -459,7 +459,7 @@ function ProtocolCard({ group }) {
       it.subRows.forEach((sr, i) => rows.push({ key: `${it.id}-${i}`, label: sr.label, usd: sr.usd, apy: sr.apy, isDebt: false, live: true }));
     } else {
       const isOnChain = it.liveDollarValue != null;
-      const val = isOnChain ? it.liveDollarValue : it.current;
+      const val = isOnChain ? it.liveDollarValue + (it.liveRewards?.aeroEarnedUsd ?? 0) : it.current;
       const isDebt = it.type === "debt";
       const rowPnl = (isOnChain && !isDebt && it.invested > 0) ? val - it.invested : null;
       rows.push({ key: it.id, label: it.asset, usd: val, apy: it.liveApy, invested: it.invested, date: it.date, isDebt, pnl: rowPnl, live: isOnChain, rewards: it.liveRewards });
@@ -957,7 +957,9 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   });
 
   // Portfolio totals from live on-chain data (fall back to pos.current for manual positions)
-  const effectiveVal = p => p.liveDollarValue ?? (p.type !== "debt" && p.type !== "airdrop" ? (p.current ?? 0) : 0);
+  // Claimable rewards (напр. AERO emissions) учитываются в стоимости позиции и в P&L.
+  const rewardUsd = p => p.liveRewards?.aeroEarnedUsd ?? 0;
+  const effectiveVal = p => p.liveDollarValue != null ? p.liveDollarValue + rewardUsd(p) : (p.type !== "debt" && p.type !== "airdrop" ? (p.current ?? 0) : 0);
   const liveTotal   = livePosData.reduce((s, p) => s + effectiveVal(p), 0);
   // Cost basis on the SAME net basis as liveTotal: debt nets out (borrowed sum reduces invested),
   // so the identity Портфель − Вложено = P&L always holds.
@@ -988,7 +990,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
       let hasPnl = false;
       const pnl = items.reduce((s, p) => {
         if (!p.invested || p.type === "debt") return s;
-        const v = p.liveDollarValue ?? (p.type !== "airdrop" ? (p.current ?? 0) : null);
+        const v = p.liveDollarValue != null ? p.liveDollarValue + rewardUsd(p) : (p.type !== "airdrop" ? (p.current ?? 0) : null);
         if (v == null) return s;
         hasPnl = true;
         return s + (v - p.invested);
