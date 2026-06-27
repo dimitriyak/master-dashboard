@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useParams, Navigate, useLocation } from 'react-router-dom'
 import {
-  STORAGE_KEYS, WISH_CATEGORIES, DEFI_INITIAL, WAY_INITIAL, NW_INITIAL,
+  STORAGE_KEYS, DEFI_INITIAL, WAY_INITIAL, NW_INITIAL,
   DEFI_WEEKS, TYPE_ICONS, protocolIcon, protocolUrl, C, BYBIT_PROXY_URL, AI_PROXY_URL, NEWS_URL, pill,
   SYNC_URL, SYNC_TOKEN, AI_STATS_URL, DEFI_PORTFOLIO_URL, PORTFOLIO_MONITOR_URL, RESOURCES_DEFAULT,
 } from './constants'
@@ -67,32 +67,6 @@ function ls(key, fallback) {
 }
 function lsSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
-// Сжимает картинку (File/Blob) в компактный JPEG data-URL. Нужно, чтобы вставленный
-// из буфера артефакт не раздувал localStorage и облачную синхронизацию вишлиста.
-function imageToDataURL(blob, maxDim = 900, quality = 0.72) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = w; canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-      try { resolve(canvas.toDataURL("image/jpeg", quality)); }
-      catch (e) { reject(e); }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("не удалось прочитать изображение")); };
-    img.src = url;
-  });
-}
-
-// true, если строка — ссылка на картинку или data-URL картинки (для вставки текстом).
-const isImageRef = (s) =>
-  /^data:image\//i.test(s) || /^https?:\/\/\S+\.(png|jpe?g|gif|webp|avif|svg)(\?\S*)?$/i.test(s);
-
 function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigate }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -122,11 +96,6 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
       setRabbyIdle((d.walletTokens || []).reduce((s, t) => s + (t.usdValue ?? 0), 0));
     }).catch(() => {});
   }, []);
-  const wishTotal = WISH_CATEGORIES.reduce((s, c) => s + c.items.length, 0);
-  const wishDone = WISH_CATEGORIES.reduce((s, c) => s + c.items.filter((_, i) => wishState[c.id]?.[i]?.done).length, 0);
-  const wishPct = Math.round((wishDone / wishTotal) * 100);
-  const wishNextTask = (() => { for (const cat of WISH_CATEGORIES) { const idx = cat.items.findIndex((_, i) => !wishState[cat.id]?.[i]?.done); if (idx !== -1) return cat.items[idx]; } return null; })();
-
   const defiTotal = DEFI_WEEKS.reduce((s, w) => s + w.tasks.length, 0);
   const defiHwDone = Object.values(defiHw).filter(Boolean).length;
   const defiHwPct = Math.round((defiHwDone / defiTotal) * 100);
@@ -142,7 +111,6 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
 
   const cards = [
     { id: "defi", icon: "₿", label: "CRYPTO", title: "Crypto", subtitle: "Портфель · P&L · APY", progress: defiHwPct, stat1: { label: "P&L", val: `${defiPnl >= 0 ? "+" : ""}$${defiPnl.toFixed(0)}` }, stat2: bybitBalance != null ? { label: "Bybit", val: `$${Math.round(bybitBalance).toLocaleString()}` } : { label: "в работе", val: `$${defiCurrent.toLocaleString()}` }, nextTask: defiNextTask || null, color: "#00E5FF" },
-    { id: "wishes", icon: "✦", label: "ЛИЧНОЕ", title: "Wishlist", subtitle: "Цели · Мечты · Планы", progress: wishPct, stat1: { label: "выполнено", val: `${wishDone}/${wishTotal}` }, stat2: { label: "категорий", val: `${WISH_CATEGORIES.length}` }, nextTask: wishNextTask || null, color: "#7C5CFC" },
   ];
 
   return (
@@ -421,280 +389,6 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
             </div>
           </button>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function WishesDashboard({ wishState, setWishState }) {
-  const [addState, setAddState] = useState({}); // { [catId]: { open, text, imageUrl } }
-  const [imgErrors, setImgErrors] = useState({});
-  const [search, setSearch] = useState("");
-  const [sortMode, setSortMode] = useState("default"); // default | pending | done
-
-  const total = WISH_CATEGORIES.reduce((s, c) => s + c.items.length, 0);
-  const done  = WISH_CATEGORIES.reduce((s, c) => s + c.items.filter((_, i) => wishState[c.id]?.[i]?.done).length, 0);
-
-  const getAdd = (catId) => addState[catId] || { open: false, text: "", imageUrl: "" };
-  const setAdd = (catId, patch) => setAddState(p => ({ ...p, [catId]: { ...getAdd(catId), ...patch } }));
-
-  const toggleItem = (catId, idx, text) => {
-    setWishState(prev => ({
-      ...prev,
-      [catId]: { ...prev[catId], [idx]: { ...(prev[catId]?.[idx] || { text }), done: !prev[catId]?.[idx]?.done } },
-    }));
-  };
-
-  const addItem = (catId) => {
-    const { text, imageUrl } = getAdd(catId);
-    if (!text.trim()) return;
-    const key = `new_${Date.now()}`;
-    setWishState(prev => ({
-      ...prev,
-      [catId]: { ...prev[catId], [key]: { text: text.trim(), done: false, ...(imageUrl.trim() ? { image: imageUrl.trim() } : {}) } },
-    }));
-    setAdd(catId, { open: false, text: "", imageUrl: "" });
-  };
-
-  const deleteItem = (catId, key) => {
-    setWishState(prev => {
-      const next = { ...prev[catId] };
-      delete next[key];
-      return { ...prev, [catId]: next };
-    });
-  };
-
-  // Cmd/Ctrl+V в открытой форме: картинку из буфера сжимаем и кладём в поле картинки,
-  // ссылку/​data-URL картинки — тоже. Обычный текст не трогаем (работает дефолт инпута).
-  const attachImage = async (catId, blob) => {
-    try { setAdd(catId, { imageUrl: await imageToDataURL(blob) }); }
-    catch { toast("Не удалось вставить изображение из буфера", "#FF9800"); }
-  };
-
-  const onPasteAdd = async (catId, e) => {
-    const dt = e.clipboardData;
-    if (!dt) return;
-    for (const item of dt.items) {
-      if (item.type && item.type.startsWith("image/")) {
-        const file = item.getAsFile();
-        if (!file) continue;
-        e.preventDefault();
-        await attachImage(catId, file);
-        return;
-      }
-    }
-    const text = (dt.getData("text") || "").trim();
-    if (text && isImageRef(text)) {
-      e.preventDefault();
-      setAdd(catId, { imageUrl: text });
-    }
-  };
-
-  // Кнопка «Вставить из буфера» — работает без фокуса в поле (мобильные/тач).
-  const pasteFromClipboard = async (catId) => {
-    try {
-      if (navigator.clipboard?.read) {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const type = item.types.find(t => t.startsWith("image/"));
-          if (type) { await attachImage(catId, await item.getType(type)); return; }
-        }
-      }
-      const text = (await navigator.clipboard?.readText?.() || "").trim();
-      if (text && isImageRef(text)) setAdd(catId, { imageUrl: text });
-      else toast("В буфере нет картинки", "#FF9800");
-    } catch {
-      toast("Нет доступа к буферу — нажми Cmd/Ctrl+V в форме", "#FF9800");
-    }
-  };
-
-  return (
-    <div className="page-pad" style={{ maxWidth: 1100, margin: "0 auto" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-        <div className="display" style={{ fontSize: 17, fontWeight: 700, color: C.text }}>Wishlist</div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..." style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", color: C.text, fontSize: 12, outline: "none", width: 160 }} />
-          {[{ v: "default", l: "По умолчанию" }, { v: "pending", l: "Невыполненные" }, { v: "done", l: "Выполненные" }].map(s => (
-            <button key={s.v} onClick={() => setSortMode(s.v)} style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: sortMode === s.v ? 700 : 400, background: sortMode === s.v ? "rgba(124,92,252,0.15)" : "transparent", border: `1px solid ${sortMode === s.v ? "#7C5CFC" : C.border}`, color: sortMode === s.v ? "#7C5CFC" : C.muted, cursor: "pointer" }}>{s.l}</button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 20 }}>
-          {[{ label: "всего", val: total, color: C.text }, { label: "выполнено", val: done, color: "#4ADE80" }, { label: "осталось", val: total - done, color: "#FF9800" }].map(s => (
-            <div key={s.label} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.val}</div>
-              <div style={{ fontSize: 11, color: C.muted }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Category completion summary */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-        {WISH_CATEGORIES.map(cat => {
-          const catItems = [
-            ...cat.items.map((text, i) => ({ done: wishState[cat.id]?.[i]?.done ?? false })),
-            ...Object.entries(wishState[cat.id] || {}).filter(([k]) => k.startsWith("new_")).map(([, v]) => ({ done: v.done })),
-          ];
-          const catDone = catItems.filter(x => x.done).length;
-          const catTotal = catItems.length;
-          const pct = catTotal ? (catDone / catTotal) * 100 : 0;
-          return (
-            <div key={cat.id} style={{ flex: "1 1 120px", minWidth: 100, background: C.card, borderRadius: 8, padding: "8px 10px", border: `1px solid ${C.border}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                <span style={{ fontSize: 11, color: cat.color, fontWeight: 700 }}>{cat.icon} {cat.title}</span>
-                <span style={{ fontSize: 11, color: C.muted }}>{catDone}/{catTotal}</span>
-              </div>
-              <div style={{ height: 3, background: C.border, borderRadius: 2 }}>
-                <div style={{ height: "100%", width: `${pct}%`, background: cat.color, borderRadius: 2, transition: "width 0.4s" }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 16 }}>
-        {WISH_CATEGORIES.map(cat => {
-          const extraItems = Object.entries(wishState[cat.id] || {})
-            .filter(([k]) => k.startsWith("new_"))
-            .map(([k, v]) => ({ key: k, ...v }));
-          const allItems = [
-            ...cat.items.map((text, i) => ({ key: i, text: wishState[cat.id]?.[i]?.text ?? text, done: wishState[cat.id]?.[i]?.done ?? false, image: wishState[cat.id]?.[i]?.image })),
-            ...extraItems,
-          ];
-          const pct = allItems.length ? Math.round((allItems.filter(x => x.done).length / allItems.length) * 100) : 0;
-          const filteredItems = (() => {
-            let items = search.trim() ? allItems.filter(x => x.text?.toLowerCase().includes(search.toLowerCase())) : allItems;
-            if (sortMode === "pending") items = [...items].sort((a, b) => a.done - b.done);
-            if (sortMode === "done") items = [...items].sort((a, b) => b.done - a.done);
-            return items;
-          })();
-          const { open: addOpen, text: addText, imageUrl: addImg } = getAdd(cat.id);
-          if (search.trim() && filteredItems.length === 0) return null;
-
-          return (
-            <div key={cat.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, boxShadow: CARD_SHADOW, overflow: "hidden" }}>
-              {/* Top accent line */}
-              <div style={{ height: 3, background: `linear-gradient(90deg, ${cat.color}, ${cat.color}55)` }} />
-
-              {/* Header */}
-              <div style={{ padding: "14px 16px 10px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.05em", flex: 1 }}>{cat.title}</span>
-                <span style={{ fontSize: 11, color: C.muted, background: C.surface, borderRadius: 100, padding: "2px 8px" }}>{allItems.filter(x => x.done).length}/{allItems.length}</span>
-              </div>
-
-              {/* Progress bar */}
-              <div style={{ height: 3, background: C.border }}>
-                <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${cat.color}, ${cat.color}88)`, transition: "width 0.4s" }} />
-              </div>
-
-              {/* Items */}
-              <ul style={{ listStyle: "none", padding: "8px 12px 4px", margin: 0 }}>
-                {filteredItems.map(item => {
-                  const imgKey = `${cat.id}-${item.key}`;
-                  const imgFailed = imgErrors[imgKey];
-                  return (
-                    <li key={item.key}
-                      style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 4px", borderRadius: 8, cursor: "pointer" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
-                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                    >
-                      {/* Checkbox */}
-                      <div onClick={() => toggleItem(cat.id, item.key, item.text)}
-                        style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, marginTop: item.image && !imgFailed ? 4 : 1,
-                          border: item.done ? "none" : `2px solid ${C.border}`,
-                          background: item.done ? cat.color + "44" : "transparent",
-                          display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}>
-                        {item.done && <span style={{ color: cat.color, fontSize: 11, fontWeight: 900 }}>✓</span>}
-                      </div>
-
-                      {/* Content */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        {item.image && !imgFailed && (
-                          <img
-                            src={item.image} alt={item.text}
-                            onError={() => setImgErrors(p => ({ ...p, [imgKey]: true }))}
-                            onClick={() => toggleItem(cat.id, item.key, item.text)}
-                            style={{ width: "100%", maxHeight: 140, objectFit: "cover", borderRadius: 8, marginBottom: 6, opacity: item.done ? 0.4 : 1, transition: "opacity 0.2s" }}
-                          />
-                        )}
-                        <span onClick={() => toggleItem(cat.id, item.key, item.text)}
-                          style={{ fontSize: 14, color: item.done ? C.muted : C.text, textDecoration: item.done ? "line-through" : "none", lineHeight: 1.4, display: "block" }}>
-                          {item.text}
-                        </span>
-                      </div>
-
-                      {/* Delete (только для добавленных вручную) */}
-                      {String(item.key).startsWith("new_") && (
-                        <button onClick={(e) => { e.stopPropagation(); deleteItem(cat.id, item.key); }}
-                          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1, flexShrink: 0, opacity: 0.5 }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = "1"}
-                          onMouseLeave={e => e.currentTarget.style.opacity = "0.5"}
-                        >×</button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {/* Add form */}
-              <div style={{ padding: "4px 12px 12px" }}>
-                {!addOpen ? (
-                  <button onClick={() => setAdd(cat.id, { open: true })}
-                    style={{ width: "100%", background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 8, padding: "7px", color: C.muted, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
-                    + Добавить цель
-                  </button>
-                ) : (
-                  <div onPaste={e => onPasteAdd(cat.id, e)} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <input
-                      autoFocus
-                      value={addText}
-                      onChange={e => setAdd(cat.id, { text: e.target.value })}
-                      onKeyDown={e => e.key === "Enter" && addItem(cat.id)}
-                      placeholder="Название цели... (Cmd/Ctrl+V — вставить картинку)"
-                      style={{ background: C.surface, border: `1px solid ${cat.color}55`, borderRadius: 8, padding: "7px 10px", color: C.text, fontSize: 14, outline: "none", fontFamily: "inherit" }}
-                    />
-                    {addImg.startsWith("data:") ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.surface, border: `1px solid ${cat.color}44`, borderRadius: 8, padding: "6px 10px" }}>
-                        <span style={{ fontSize: 12, color: C.text, flex: 1 }}>📎 Картинка из буфера прикреплена</span>
-                        <button onClick={() => setAdd(cat.id, { imageUrl: "" })}
-                          style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, lineHeight: 1 }}>×</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <input
-                          value={addImg}
-                          onChange={e => setAdd(cat.id, { imageUrl: e.target.value })}
-                          placeholder="URL картинки (необязательно)"
-                          style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", color: C.text, fontSize: 12, outline: "none", fontFamily: "inherit" }}
-                        />
-                        <button onClick={() => pasteFromClipboard(cat.id)} title="Вставить картинку из буфера обмена"
-                          style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "0 10px", color: C.muted, fontSize: 13, cursor: "pointer", flexShrink: 0 }}>📋</button>
-                      </div>
-                    )}
-                    {addImg.trim() && (
-                      <img src={addImg.trim()} alt="preview"
-                        onError={e => e.target.style.display = "none"}
-                        style={{ width: "100%", maxHeight: 100, objectFit: "cover", borderRadius: 8, opacity: 0.7 }}
-                      />
-                    )}
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => addItem(cat.id)}
-                        style={{ flex: 1, background: cat.color + "18", border: `1px solid ${cat.color}44`, borderRadius: 8, padding: "7px", color: cat.color, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-                        Добавить
-                      </button>
-                      <button onClick={() => setAdd(cat.id, { open: false, text: "", imageUrl: "" })}
-                        style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 12px", color: C.muted, fontSize: 12, cursor: "pointer" }}>
-                        Отмена
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -1617,7 +1311,6 @@ function useAccent() {
   const loc = useLocation();
   if (loc.pathname.startsWith("/defi"))    return "#00E5FF";
   if (loc.pathname.startsWith("/way"))     return "#FFD700";
-  if (loc.pathname.startsWith("/wishlist"))return "#7C5CFC";
   if (loc.pathname.startsWith("/networth"))return "#4ADE80";
   if (loc.pathname.startsWith("/setup"))   return "#6C63FF";
   return "#00E5FF";
@@ -2640,7 +2333,6 @@ async function fetchGhProject(repo) {
 
 const navItems = [
   { to: "/defi",      label: "Crypto",    color: "#00E5FF" },
-  { to: "/wishlist",  label: "Wishlist",  color: "#7C5CFC" },
   { to: "/networth",  label: "Networth",  color: "#4ADE80" },
   { to: "/setup",     label: "Setup",     color: "#6C63FF" },
 ];
@@ -2649,7 +2341,6 @@ const SHORTCUTS_HELP = [
   { key: "g h", desc: "Главная" },
   { key: "g d", desc: "Crypto" },
   { key: "g n", desc: "Networth" },
-  { key: "g l", desc: "Wishlist" },
 ];
 
 function Shell({ children, accent, syncStatus }) {
@@ -2768,7 +2459,7 @@ function AppInner() {
     const down = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (g) {
-        const map = { h: "/", d: "/defi", n: "/networth", l: "/wishlist" };
+        const map = { h: "/", d: "/defi", n: "/networth" };
         if (map[e.key]) { navigate(map[e.key]); g = false; clearTimeout(timer); }
       }
       if (e.key === "g") { g = true; timer = setTimeout(() => { g = false; }, 1500); }
@@ -2781,11 +2472,10 @@ function AppInner() {
     <Shell accent={accent} syncStatus={syncStatus}>
       <Routes>
         <Route path="/" element={<Overview wishState={wishState} defiPositions={defiPositions} defiHw={hwChecked} wayData={wayData} nwData={nwData} onNavigate={(id) => {
-                const map = { home: "/", wishes: "/wishlist", defi: "/defi", way: "/way", networth: "/networth" };
+                const map = { home: "/", defi: "/defi", way: "/way", networth: "/networth" };
                 navigate(map[id] ?? `/${id}`);
               }} />} />
         <Route path="/way" element={<Navigate to="/networth" replace />} />
-        <Route path="/wishlist" element={<WishesDashboard wishState={wishState} setWishState={setWishState} />} />
         <Route path="/defi" element={<Navigate to="/defi/portfolio" replace />} />
         <Route path="/defi/:tab" element={<DefiDashboard positions={defiPositions} setPositions={setDefiPositions} hwChecked={hwChecked} setHwChecked={setHwChecked} />} />
         <Route path="/networth" element={<NetWorthDashboard nwData={nwData} setNwData={setNwData} wayData={wayData} setWayData={setWayData} />} />
