@@ -115,42 +115,47 @@ export default {
 
     try {
       // Each source is wrapped so one slow/hanging upstream can't stall the whole response.
-      const guard = (p, fallback) => Promise.race([
-        Promise.resolve().then(() => p).catch(() => fallback),
-        new Promise(res => setTimeout(() => res(fallback), 16000)),
-      ]);
-      const [aave, morpho, aerodrome, walletTokens, nativeBalances, aaveEthereum, hyperliquid, lighter, loopscale, kodiak, apys, prices] = await Promise.all([
-        guard(fetchAave(), []),
-        guard(fetchMorpho(), []),
-        guard(fetchAerodrome(), []),
-        guard(fetchWalletTokens(), []),
-        guard(fetchNativeBalances(), []),
-        guard(fetchAaveEthereum(), []),
-        guard(fetchHyperliquid(), []),
-        guard(fetchLighter(), []),
-        guard(fetchLoopscale(), []),
-        guard(fetchKodiak(), []),
-        guard(fetchApys(), {}),
-        guard(fetchAllPrices(), {}),
+      // It's also cached, so a transient failure returns the last known good state.
+      const guardAndCache = (key, fn, ttl) => Promise.race([
+        withCache(key, fn, ttl),
+        new Promise(res => setTimeout(() => withCache(key, () => Promise.resolve(null), ttl), 16000)), // On timeout, return from cache
       ]);
 
-      // LP positions: any non-zero balance counts (LP token amounts are tiny by design)
-      const allPositions = [...aave, ...morpho].filter(p => p.balance >= 0.01)
-        .concat(aerodrome.filter(p => p.staked > 0 || p.unstaked > 0))
-        .concat(aaveEthereum)
-        .concat(hyperliquid)
-        .concat(lighter)
-        .concat(loopscale)
-        .concat(kodiak);
+      const [aave, morpho, aerodrome, walletTokens, nativeBalances, aaveEthereum, hyperliquid, lighter, loopscale, kodiak, apys, prices] = await Promise.all([
+        guardAndCache("aave-v1", fetchAave, 900),
+        guardAndCache("morpho-v1", fetchMorpho, 900),
+        guardAndCache("aerodrome-v1", fetchAerodrome, 900),
+        guardAndCache("wallet-tokens-v1", fetchWalletTokens, 900),
+        guardAndCache("native-balances-v1", fetchNativeBalances, 900),
+        guardAndCache("aave-eth-v1", fetchAaveEthereum, 900),
+        guardAndCache("hyperliquid-v1", fetchHyperliquid, 900),
+        guardAndCache("lighter-v2", fetchLighter, 900),
+        guardAndCache("loopscale-v2", fetchLoopscale, 900),
+        guardAndCache("kodiak-v1", fetchKodiak, 900),
+        guardAndCache("apys-v1", fetchApys, 1800),
+        fetchAllPrices(),   // Already uses withCache internally
+      ]);
+
+      // Filter out nulls from failed/timed-out fetches before merging
+      const allPositions = [
+        ...(aave || []),
+        ...(morpho || []),
+        ...(aerodrome || []),
+        ...(aaveEthereum || []),
+        ...(hyperliquid || []),
+        ...(lighter || []),
+        ...(loopscale || []),
+        ...(kodiak || []),
+      ].filter(p => (p.balance >= 0.01 && p.type !== "lp") || (p.type === "lp" && (p.staked > 0 || p.unstaked > 0)));
 
       // Attach APY from DeFiLlama where available
-      const positions = allPositions.map(p => apys[p.id] != null ? { ...p, apy: apys[p.id] } : p);
+      const positions = allPositions.map(p => (apys && apys[p.id] != null) ? { ...p, apy: apys[p.id] } : p);
 
       return json({
         wallet: WALLET,
         positions,
         prices,
-        walletTokens: [...walletTokens, ...nativeBalances].filter(p => p.balance >= 0.0001),
+        walletTokens: [...(walletTokens || []), ...(nativeBalances || [])].filter(p => p.balance >= 0.0001),
         updated: new Date().toISOString(),
       });
     } catch (e) {
@@ -324,12 +329,40 @@ async function fetchBybitPrice(symbol) {
   return p > 0 ? p : null;
 }
 
+// Generic cache wrapper: runs `fn`, caches its result, and returns cached on failure.
+async function withCache(key, fn, ttlSeconds = 3600) {
+  const cache = caches.default;
+  const cached = await cache.match(key).then(r => r ? r.json() : null).catch(() => null);
+
+  try {
+    const result = await fn();
+    // Don't cache bad/empty results.
+    const isGood = (r) => r && (Array.isArray(r) ? r.length > 0 : (typeof r === 'object' ? Object.keys(r).length > 0 : true));
+
+    if (isGood(result)) {
+      const resp = new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttlSeconds}` },
+      });
+      await cache.put(key, resp);
+      return result;
+    }
+  } catch (error) {
+    // On any failure, fall through to return cached
+  }
+  return cached; // Return cached if fn failed, or if fn returned bad data.
+}
+
 // Current USD prices of the underlying tokens (for P&L growth-vs-yield split). USDC pinned to $1.
-async function fetchAllPrices() {
-  const [btc, eth, bera, aero] = await Promise.all([
-    fetchBybitPrice("BTCUSDT"), fetchBybitPrice("ETHUSDT"), fetchBybitPrice("BERAUSDT"), fetchBybitPrice("AEROUSDT"),
-  ]);
-  return { USDC: 1, WBTC: btc, WETH: eth, WBERA: bera, AERO: aero };
+function fetchAllPrices() {
+  const CACHE_KEY = "https://prices-cache.internal/all-v1";
+  return withCache(CACHE_KEY, async () => {
+    const [btc, eth, bera, aero] = await Promise.all([
+      fetchBybitPrice("BTCUSDT"), fetchBybitPrice("ETHUSDT"), fetchBybitPrice("BERAUSDT"), fetchBybitPrice("AEROUSDT"),
+    ]);
+    // If Bybit fails, we get nulls. We must have at least ETH and BTC to be valid.
+    if (!btc || !eth) throw new Error("Failed to fetch critical prices from Bybit");
+    return { USDC: 1, WBTC: btc, WETH: eth, WBERA: bera, AERO: aero };
+  }, 600); // Cache prices for 10 minutes
 }
 
 // ETH/USD — prefer Bybit, fall back to Chainlink on Base.
@@ -527,27 +560,19 @@ async function fetchLighterPoolFresh(p) {
 }
 
 async function fetchLighter() {
-  const cache = caches.default;
-  const CACHE_KEY = "https://lighter-cache.internal/all-pools-v1";
-  const lastGood = async () => {
-    const cached = await cache.match(CACHE_KEY);
-    return cached ? cached.json().catch(() => null) : null;
-  };
+  const CACHE_KEY = "https://lighter-cache.internal/all-pools-v2";
 
-  try {
+  return withCache(CACHE_KEY, async () => {
     const results = await Promise.all(LIGHTER_POOLS.map(p => fetchLighterPoolFresh(p).catch(() => null)));
     const pools = results.filter(Boolean);
 
-    if (pools.length === 0) {
-      // If all pools failed, fall back to the last known good state
-      const last = await lastGood();
-      return last ? [last] : [];
+    if (pools.length !== LIGHTER_POOLS.length) {
+      throw new Error(`Failed to fetch all Lighter pools, got ${pools.length}/${LIGHTER_POOLS.length}`);
     }
 
     const totalEquity = round(pools.reduce((s, p) => s + p.equity, 0));
     if (totalEquity < 1) {
-      const last = await lastGood();
-      return last ? [last] : [];
+      throw new Error("Lighter total equity is zero, indicating a likely data error");
     }
 
     const avgApy = (() => {
@@ -564,20 +589,9 @@ async function fetchLighter() {
       ...(avgApy != null ? { apy: avgApy } : {}),
       pools,
     };
-    
-    // Cache the successful result
-    const resp = new Response(JSON.stringify(finalPosition), {
-      headers: { "Content-Type": "application/json", "Cache-Control": "max-age=3600" }, // Cache for 1 hour
-    });
-    await cache.put(CACHE_KEY, resp);
 
     return [finalPosition];
-
-  } catch (error) {
-    // On any failure, return the last known good result
-    const last = await lastGood();
-    return last ? [last] : [];
-  }
+  }, 900); // Cache for 15 minutes
 }
 
 // ── Loopscale: leveraged loops on Solana (net equity = collateral − debt) ─────
@@ -608,116 +622,116 @@ async function solRpc(method, params) {
 // Loopscale Earn position (OnRe Growth) valued on-chain via vault share price.
 // Resilient: caches last good value and returns it if the Solana RPC is slow/unavailable,
 // so the row never silently disappears on a transient hiccup.
-async function fetchLoopscaleEarn() {
-  const cache = caches.default;
-  const LAST = "https://loopscale.internal/onre-earn-last";
-  const lastGood = async () => { const c = await cache.match(LAST); return c ? c.json().catch(() => null) : null; };
+function fetchLoopscaleEarn() {
+  const CACHE_KEY = "https://loopscale.internal/onre-earn-last-v2";
 
-  const [bal, vault] = await Promise.all([
-    solRpc("getTokenAccountBalance", [ONRE_EARN_ATA]),
-    solRpc("getAccountInfo", [ONRE_EARN_VAULT, { encoding: "base64" }]),
-  ]);
-  const shares = Number(bal?.value?.amount || 0);
-  if (!shares || !vault?.value?.data?.[0]) return await lastGood();
-  const buf = Uint8Array.from(atob(vault.value.data[0]), c => c.charCodeAt(0));
-  const u64 = (off) => { const dv = new DataView(buf.buffer); return Number(dv.getBigUint64(off, true)); };
-  const assets = u64(ONRE_VAULT_ASSETS_OFFSET);
-  const vShares = u64(ONRE_VAULT_SHARES_OFFSET);
-  if (!vShares) return await lastGood();
-  const price = assets / vShares;                 // USD per share (grows with yield)
-  const usd = round(shares * price / 1e6);
-  if (usd <= 0) return await lastGood();
+  return withCache(CACHE_KEY, async () => {
+    const [bal, vault] = await Promise.all([
+      solRpc("getTokenAccountBalance", [ONRE_EARN_ATA]),
+      solRpc("getAccountInfo", [ONRE_EARN_VAULT, { encoding: "base64" }]),
+    ]);
+    const shares = Number(bal?.value?.amount || 0);
+    if (!shares || !vault?.value?.data?.[0]) throw new Error("Failed to fetch Loopscale Earn share or vault data");
 
-  // Realized APY = annualized growth of the vault share price.
-  // Baseline persisted in CF cache; seeded from the deposit point for an immediate figure.
-  let apy = null;
-  try {
-    const cache = caches.default;
-    const key = "https://loopscale.internal/onre-share-price-v1";
-    const SEED = { price: 1.017521, ts: 1781452717 }; // deposit: 2026-06-14 share price
-    let base = null;
-    const cached = await cache.match(key);
-    if (cached) base = await cached.json().catch(() => null);
-    if (!base || !(base.price > 0)) {
-      base = SEED;
-      await cache.put(key, new Response(JSON.stringify({ price, ts: Math.floor(Date.now() / 1000) }),
-        { headers: { "Cache-Control": "max-age=2592000" } }));
-    }
-    const dt = Math.floor(Date.now() / 1000) - base.ts;
-    if (dt > 6 * 3600 && base.price > 0) {
-      const a = (Math.pow(price / base.price, 31536000 / dt) - 1) * 100;
-      if (a > 0 && a < 60) apy = round(a);
-    }
-  } catch (_) {}
+    const buf = Uint8Array.from(atob(vault.value.data[0]), c => c.charCodeAt(0));
+    const u64 = (off) => { const dv = new DataView(buf.buffer); return Number(dv.getBigUint64(off, true)); };
+    const assets = u64(ONRE_VAULT_ASSETS_OFFSET);
+    const vShares = u64(ONRE_VAULT_SHARES_OFFSET);
+    if (!vShares) throw new Error("Loopscale vault has zero shares");
 
-  const result = { label: "OnRe Growth", usd, apy };
-  await cache.put(LAST, new Response(JSON.stringify(result), { headers: { "Cache-Control": "max-age=604800" } }));
-  return result;
+    const price = assets / vShares; // USD per share (grows with yield)
+    const usd = round(shares * price / 1e6);
+    if (usd <= 0) throw new Error("Loopscale Earn position has zero or negative value");
+
+    // Realized APY = annualized growth of the vault share price.
+    let apy = null;
+    try {
+      const key = "https://loopscale.internal/onre-share-price-v1";
+      const SEED = { price: 1.017521, ts: 1781452717 }; // deposit: 2026-06-14 share price
+      let base = await caches.default.match(key).then(r => r ? r.json() : null).catch(() => null);
+      if (!base || !(base.price > 0)) {
+        base = SEED;
+        const resp = new Response(JSON.stringify({ price, ts: Math.floor(Date.now() / 1000) }), { headers: { "Cache-Control": "max-age=2592000" } });
+        await caches.default.put(key, resp);
+      }
+      const dt = Math.floor(Date.now() / 1000) - base.ts;
+      if (dt > 6 * 3600 && base.price > 0) {
+        const a = (Math.pow(price / base.price, 31536000 / dt) - 1) * 100;
+        if (a > 0 && a < 60) apy = round(a);
+      }
+    } catch (_) {}
+
+    return { label: "OnRe Growth", usd, apy };
+  }, 900); // Cache for 15 minutes
 }
 
 async function fetchLoopscale() {
-  const [res, earn] = await Promise.all([
-    tfetch(LOOPSCALE_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
-    }).then(r => r.json()).catch(() => null),
-    fetchLoopscaleEarn(),
-  ]);
+  const CACHE_KEY = "https://loopscale.internal/all-loops-v2";
 
-  const items = Array.isArray(res?.items) ? res.items : [];
-  if (items.length === 0 && !earn) return [];
+  return withCache(CACHE_KEY, async () => {
+    const [res, earn] = await Promise.all([
+      tfetch(LOOPSCALE_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
+      }).then(r => r.json()).catch(() => null),
+      fetchLoopscaleEarn(),
+    ]);
 
-  const loops = [];
-  let totalEquity = 0, yieldSum = 0, costSum = 0;
+    const items = Array.isArray(res?.items) ? res.items : [];
+    if (items.length === 0 && !earn) throw new Error("Loopscale API returned no items and Earn position is also missing");
 
-  for (const it of items) {
-    const collUsd = Number(it.collateralUsd) || 0;
-    const prinUsd = Number(it.principalUsd) || 0;
-    const intUsd  = Number(it.interestAccruedUsd) || 0;
-    const equity  = collUsd - prinUsd - intUsd;
-    if (equity <= 0) continue;
+    const loops = [];
+    let totalEquity = 0, yieldSum = 0, costSum = 0;
 
-    // collateralYieldPct is a fraction (0.118 = 11.8%); ledger.apy is borrow rate scaled by 1e6.
-    const collYieldPct = Number(it.collateralYieldPct) || 0;
-    const borrowApy = it.ledgers?.length ? (Number(it.ledgers[0].apy) || 0) / 1e6 : 0;
+    for (const it of items) {
+      const collUsd = Number(it.collateralUsd) || 0;
+      const prinUsd = Number(it.principalUsd) || 0;
+      const intUsd  = Number(it.interestAccruedUsd) || 0;
+      const equity  = collUsd - prinUsd - intUsd;
+      if (equity <= 0) continue;
 
-    yieldSum += collYieldPct * collUsd;
-    costSum  += borrowApy * prinUsd;
-    totalEquity += equity;
+      // collateralYieldPct is a fraction (0.118 = 11.8%); ledger.apy is borrow rate scaled by 1e6.
+      const collYieldPct = Number(it.collateralYieldPct) || 0;
+      const borrowApy = it.ledgers?.length ? (Number(it.ledgers[0].apy) || 0) / 1e6 : 0;
 
-    const loanApy = equity > 0 ? round((collYieldPct * collUsd - borrowApy * prinUsd) / equity * 100) : null;
-    const sym = LOOPSCALE_COLLATERAL_SYMBOLS[it.collateral?.[0]?.assetMint] || "Loop";
-    loops.push({
-      address: it.loan?.address || null,
-      label: sym,
-      equity: round(equity),
-      collateralUsd: round(collUsd),
-      principalUsd: round(prinUsd),
-      apy: loanApy,
-      pnlUsd: it.pnlUsd != null ? round(Number(it.pnlUsd)) : null,
-    });
-  }
+      yieldSum += collYieldPct * collUsd;
+      costSum  += borrowApy * prinUsd;
+      totalEquity += equity;
 
-  // Earn (OnRe Growth) row + value.
-  const rows = [...loops];
-  if (earn) { rows.push(earn); totalEquity += earn.usd; }
+      const loanApy = equity > 0 ? round((collYieldPct * collUsd - borrowApy * prinUsd) / equity * 100) : null;
+      const sym = LOOPSCALE_COLLATERAL_SYMBOLS[it.collateral?.[0]?.assetMint] || "Loop";
+      loops.push({
+        address: it.loan?.address || null,
+        label: sym,
+        equity: round(equity),
+        collateralUsd: round(collUsd),
+        principalUsd: round(prinUsd),
+        apy: loanApy,
+        pnlUsd: it.pnlUsd != null ? round(Number(it.pnlUsd)) : null,
+      });
+    }
 
-  if (rows.length === 0) return [];
+    // Earn (OnRe Growth) row + value.
+    const rows = [...loops];
+    if (earn) { rows.push(earn); totalEquity += earn.usd; }
 
-  // Card APY: value-weighted over rows that have a known APY (Earn has none live → excluded).
-  const apyRows = rows.filter(r => r.apy != null);
-  const apyW = apyRows.reduce((s, r) => s + (r.usd ?? r.equity), 0);
-  const netApy = apyW > 0 ? round(apyRows.reduce((s, r) => s + r.apy * (r.usd ?? r.equity), 0) / apyW) : null;
+    if (rows.length === 0) throw new Error("No active loops or earn positions found in Loopscale");
 
-  return [{
-    id: "loopscale-loops",
-    chain: "solana", protocol: "Loopscale", asset: "ONyc Loop",
-    balance: round(totalEquity), usdValue: round(totalEquity),
-    type: "vault", color: "#14F195",
-    ...(netApy != null ? { apy: netApy } : {}),
-    loops: rows,
-  }];
+    // Card APY: value-weighted over rows that have a known APY (Earn has none live → excluded).
+    const apyRows = rows.filter(r => r.apy != null);
+    const apyW = apyRows.reduce((s, r) => s + (r.usd ?? r.equity), 0);
+    const netApy = apyW > 0 ? round(apyRows.reduce((s, r) => s + r.apy * (r.usd ?? r.equity), 0) / apyW) : null;
+
+    return [{
+      id: "loopscale-loops",
+      chain: "solana", protocol: "Loopscale", asset: "ONyc Loop",
+      balance: round(totalEquity), usdValue: round(totalEquity),
+      type: "vault", color: "#14F195",
+      ...(netApy != null ? { apy: netApy } : {}),
+      loops: rows,
+    }];
+  }, 900); // Cache for 15 minutes
 }
 
 // ── Kodiak (Berachain): Bault (ERC4626) wrapping a Kodiak Island LP ───────────

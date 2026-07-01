@@ -44,24 +44,57 @@ async function getPortfolio(env) {
 // Tokens Bybit doesn't price (returns $0) — value them via DeFiLlama (key = coingecko id).
 const PRICE_FIX = { GRAM: "coingecko:the-open-network" };
 
-// Bybit: total equity (corrected for unpriced tokens) + per-coin map {coin:{amt,usd}}.
-async function getBybit(env) {
-  const d = await env.BYBIT.fetch("https://bybit-proxy/").then(r => r.json()).catch(() => null);
-  const acc = d?.result?.list?.[0];
-  if (!acc?.totalEquity) return null;
-  let equity = Number(acc.totalEquity) || 0;
-  const coins = {};
-  for (const c of (acc.coin || [])) {
-    let usd = parseFloat(c.usdValue) || 0;
-    const amt = parseFloat(c.walletBalance) || 0;
-    if (usd < 0.5 && amt > 0 && PRICE_FIX[c.coin]) {
-      const pr = await tfetch(`https://coins.llama.fi/prices/current/${PRICE_FIX[c.coin]}`).then(r => r.json()).catch(() => null);
-      const p = pr?.coins?.[PRICE_FIX[c.coin]]?.price;
-      if (p > 0) { equity += amt * p - usd; usd = amt * p; }
+// Generic cache wrapper: runs `fn`, caches its result, and returns cached on failure.
+async function withCache(cacheKey, fn, ttlSeconds = 3600) {
+  const cache = caches.default;
+  const cached = await cache.match(cacheKey).then(r => r ? r.json() : null).catch(() => null);
+
+  try {
+    const result = await fn();
+    // A good Bybit result must be an object with a positive equity.
+    const isGood = (r) => r && typeof r === 'object' && r.equity > 0 && typeof r.coins === 'object';
+
+    if (!isGood(result) && isGood(cached)) {
+      return cached; // Current fetch failed or returned bad data, but cache is good.
     }
-    if (usd >= 1) coins[c.coin] = { amt, usd };
+    if (!isGood(result)) {
+       throw new Error(`Function for ${cacheKey} returned empty or invalid result`);
+    }
+
+    const resp = new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json", "Cache-Control": `max-age=${ttlSeconds}` } });
+    await cache.put(cacheKey, resp);
+    return result;
+  } catch (error) {
+    if (cached) return cached; // On any failure, return last known good result if available
+    return null; // If no cache, return null to signify a hard failure.
   }
-  return { equity, coins };
+}
+
+// Bybit: total equity + per-coin map {coin:{amt,usd}}, now wrapped in a cache.
+async function getBybit(env) {
+  const CACHE_KEY = "https://bybit-cache.internal/data-v3";
+  const fetchFresh = async () => {
+    const d = await env.BYBIT.fetch("https://bybit-proxy/").then(r => r.json()).catch(() => null);
+    const acc = d?.result?.list?.[0];
+    if (!acc?.totalEquity) return null;
+
+    let equity = Number(acc.totalEquity) || 0;
+    const coins = {};
+    for (const c of (acc.coin || [])) {
+      let usd = parseFloat(c.usdValue) || 0;
+      const amt = parseFloat(c.walletBalance) || 0;
+      if (usd < 0.5 && amt > 0 && PRICE_FIX[c.coin]) {
+        const pr = await tfetch(`https://coins.llama.fi/prices/current/${PRICE_FIX[c.coin]}`).then(r => r.json()).catch(() => null);
+        const p = pr?.coins?.[PRICE_FIX[c.coin]]?.price;
+        if (p > 0) { equity += amt * p - usd; usd = amt * p; }
+      }
+      if (usd >= 1) coins[c.coin] = { amt, usd };
+    }
+    // To be considered "good", the result needs a positive equity.
+    if (equity <= 0) return null;
+    return { equity, coins };
+  };
+  return withCache(CACHE_KEY, fetchFresh, 900); // Cache for 15 minutes
 }
 
 async function getBybitEquity(env) {
@@ -185,15 +218,15 @@ async function runAlerts(env) {
   );
   for (const [id, c] of Object.entries(cur.pos)) {
     const b = baseline.pos[id];
-    if (!b) { add(`new-${id}`, `🆕 <b>Новая позиция</b>\n${c.name}: $${c.usd.toFixed(0)}`); continue; }
+    if (!b) { /* add(`new-${id}`, `🆕 <b>Новая позиция</b>\n${c.name}: $${c.usd.toFixed(0)}`); */ continue; }
     if (Math.abs(b.usd) > 5) {
       const dpct = (c.usd - b.usd) / Math.abs(b.usd) * 100;
       if (swingConfirmed(c.usd, b.usd, prev?.pos?.[id]?.usd ?? null))
         add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}${reasonLine(c.asset, changes)}`);
     }
-    // APY changes are not sent as alerts per user request, only in digest.
-    // if (b.apy != null && c.apy != null && Math.abs(c.apy - b.apy) >= APY_DELTA)
-    //   add(`apy-${id}`, `📊 <b>${c.name}: APY ${c.apy > b.apy ? "вырос" : "упал"}</b>\n${b.apy.toFixed(1)}% → ${c.apy.toFixed(1)}%`);
+    // APY change alerts are disabled as per user request (they are included in the daily digest).
+    /* if (b.apy != null && c.apy != null && Math.abs(c.apy - b.apy) >= APY_DELTA)
+      add(`apy-${id}`, `📊 <b>${c.name}: APY ${c.apy > b.apy ? "вырос" : "упал"}</b>\n${b.apy.toFixed(1)}% → ${c.apy.toFixed(1)}%`); */
   }
   for (const id of Object.keys(baseline.pos)) {
     // «закрыта» только если позиция отсутствует и в текущем, и в прошлом снимке —
@@ -225,7 +258,7 @@ async function runAlerts(env) {
         add(`bb-drop-${coin}`, `📉 <b>Bybit: ${coin} уменьшился</b>\n${fmtAmt(b.amt)} → ${fmtAmt(c.amt)} (~-$${(b.usd - c.usd).toFixed(0)}).`);
     }
     for (const coin of Object.keys(bbCur)) {
-      if (!bbBase[coin]) add(`bb-new-${coin}`, `🆕 <b>Bybit: новая монета ${coin}</b>\n${fmtAmt(bbCur[coin].amt)} (~$${bbCur[coin].usd.toFixed(0)})`);
+      /* if (!bbBase[coin]) add(`bb-new-${coin}`, `🆕 <b>Bybit: новая монета ${coin}</b>\n${fmtAmt(bbCur[coin].amt)} (~$${bbCur[coin].usd.toFixed(0)})`); */
     }
   }
 
@@ -248,28 +281,48 @@ async function recordHistory(env, { data, bybit }) {
     const usd = posVal(p);
     if (Math.abs(usd) >= 1) breakdown[`defi:${p.id}`] = { name: `${p.protocol} ${p.asset}`, usd };
   }
-  for (const [coin, c] of Object.entries(bybit?.coins || {}))
-    breakdown[`bybit:${coin}`] = { name: `Bybit ${coin}`, usd: c.usd };
 
   const defiTotal = data.positions.reduce((s, p) => s + posVal(p), 0);
-
-  // If bybit fetch fails, reuse yesterday's value to prevent chart dips.
   let bybitEquity = bybit?.equity;
-  if (bybitEquity == null) {
+  let bybitCoins = bybit?.coins;
+
+  // If bybit fetch fails, try to use yesterday's coin amounts with today's prices.
+  if (bybit == null) {
     const history = await getHistory(env, 1);
     if (history && history.length > 0) {
       const lastEntry = history[history.length - 1];
       const lastDate = new Date(lastEntry.date);
       const todayDate = new Date(day);
       const diffDays = Math.round((todayDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
-      if (diffDays <= 1 && lastEntry.bybit != null) {
-        bybitEquity = lastEntry.bybit;
+
+      if (diffDays <= 1 && lastEntry.bybitCoins) {
+        const lastCoins = lastEntry.bybitCoins;
+        const currentPrices = data.prices;
+        let newEquity = 0;
+
+        for (const [coin, c] of Object.entries(lastCoins)) {
+          // c is { amt, usd }. Symbol mapping might be needed (e.g. BTC vs WBTC).
+          const price = currentPrices[coin] || currentPrices[`W${coin}`] || (coin === 'BTC' ? currentPrices.WBTC : null);
+          const newUsd = price ? c.amt * price : c.usd; // Fallback to old USD value if no price
+          newEquity += newUsd;
+          breakdown[`bybit:${coin}`] = { name: `Bybit ${coin}`, usd: newUsd };
+        }
+        bybitEquity = newEquity;
+        bybitCoins = lastCoins; // Keep the coin amounts, even though their value is now different
       }
     }
   }
 
+  // Add fresh bybit coins to breakdown if they exist and we didn't just build it from history
+  if (bybit?.coins) {
+    for (const [coin, c] of Object.entries(bybit.coins)) {
+      breakdown[`bybit:${coin}`] = { name: `Bybit ${coin}`, usd: c.usd };
+    }
+  }
+
   const total = defiTotal + (bybitEquity || 0);
-  const entry = { date: day, total, defi: defiTotal, bybit: bybitEquity || 0, breakdown };
+  // Store the full coin data for future fallbacks
+  const entry = { date: day, total, defi: defiTotal, bybit: bybitEquity || 0, bybitCoins: bybitCoins || {}, breakdown };
 
   await env.STATE.put(`hist:${day}`, JSON.stringify(entry)); // no expiration
   const index = (await env.STATE.get("hist:index", "json")) || [];
