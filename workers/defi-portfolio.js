@@ -528,56 +528,46 @@ async function fetchLighterPoolFresh(p) {
 
 async function fetchLighter() {
   const cache = caches.default;
-  const CACHE_KEY = "https://lighter-cache.internal/all-pools-v1";
-  const lastGood = async () => {
-    const cached = await cache.match(CACHE_KEY);
-    return cached ? cached.json().catch(() => null) : null;
-  };
+  const pools = [];
 
-  try {
-    const results = await Promise.all(LIGHTER_POOLS.map(p => fetchLighterPoolFresh(p).catch(() => null)));
-    const pools = results.filter(Boolean);
+  for (const p of LIGHTER_POOLS) {
+    const cacheKey = `https://lighter-cache.internal/pool/${p.pool_index}`;
+    let result = null;
 
-    if (pools.length === 0) {
-      // If all pools failed, fall back to the last known good state
-      const last = await lastGood();
-      return last ? [last] : [];
+    // Try fresh fetch
+    try {
+      result = await fetchLighterPoolFresh(p);
+      // Cache successful result for 10 min
+      const resp = new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json", "Cache-Control": "max-age=600" },
+      });
+      await cache.put(cacheKey, resp);
+    } catch (_) {
+      // Fetch failed — try stale cache (ignoring max-age)
+      const cached = await cache.match(cacheKey);
+      if (cached) result = await cached.json().catch(() => null);
     }
 
-    const totalEquity = round(pools.reduce((s, p) => s + p.equity, 0));
-    if (totalEquity < 1) {
-      const last = await lastGood();
-      return last ? [last] : [];
-    }
-
-    const avgApy = (() => {
-      const active = pools.filter(p => p.apy != null && p.equity > 0);
-      const w = active.reduce((s, p) => s + p.equity, 0);
-      return w > 0 ? round(active.reduce((s, p) => s + p.apy * p.equity / w, 0)) : null;
-    })();
-
-    const finalPosition = {
-      id: "lighter-public-pools",
-      chain: "lighter", protocol: "Lighter", asset: "Public Pools",
-      balance: totalEquity, usdValue: totalEquity,
-      type: "vault", color: "#4B8BFF",
-      ...(avgApy != null ? { apy: avgApy } : {}),
-      pools,
-    };
-    
-    // Cache the successful result
-    const resp = new Response(JSON.stringify(finalPosition), {
-      headers: { "Content-Type": "application/json", "Cache-Control": "max-age=3600" }, // Cache for 1 hour
-    });
-    await cache.put(CACHE_KEY, resp);
-
-    return [finalPosition];
-
-  } catch (error) {
-    // On any failure, return the last known good result
-    const last = await lastGood();
-    return last ? [last] : [];
+    if (result) pools.push(result);
   }
+
+  if (pools.length === 0) return [];
+
+  const totalEquity = round(pools.reduce((s, p) => s + p.equity, 0));
+  const avgApy = (() => {
+    const active = pools.filter(p => p.apy != null && p.equity > 0);
+    const w = active.reduce((s, p) => s + p.equity, 0);
+    return w > 0 ? round(active.reduce((s, p) => s + p.apy * p.equity / w, 0)) : null;
+  })();
+
+  return [{
+    id: "lighter-public-pools",
+    chain: "lighter", protocol: "Lighter", asset: "Public Pools",
+    balance: totalEquity, usdValue: totalEquity,
+    type: "vault", color: "#4B8BFF",
+    ...(avgApy != null ? { apy: avgApy } : {}),
+    pools,
+  }];
 }
 
 // ── Loopscale: leveraged loops on Solana (net equity = collateral − debt) ─────

@@ -191,9 +191,8 @@ async function runAlerts(env) {
       if (swingConfirmed(c.usd, b.usd, prev?.pos?.[id]?.usd ?? null))
         add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}${reasonLine(c.asset, changes)}`);
     }
-    // APY changes are not sent as alerts per user request, only in digest.
-    // if (b.apy != null && c.apy != null && Math.abs(c.apy - b.apy) >= APY_DELTA)
-    //   add(`apy-${id}`, `📊 <b>${c.name}: APY ${c.apy > b.apy ? "вырос" : "упал"}</b>\n${b.apy.toFixed(1)}% → ${c.apy.toFixed(1)}%`);
+    if (b.apy != null && c.apy != null && Math.abs(c.apy - b.apy) >= APY_DELTA)
+      add(`apy-${id}`, `📊 <b>${c.name}: APY ${c.apy > b.apy ? "вырос" : "упал"}</b>\n${b.apy.toFixed(1)}% → ${c.apy.toFixed(1)}%`);
   }
   for (const id of Object.keys(baseline.pos)) {
     // «закрыта» только если позиция отсутствует и в текущем, и в прошлом снимке —
@@ -252,24 +251,8 @@ async function recordHistory(env, { data, bybit }) {
     breakdown[`bybit:${coin}`] = { name: `Bybit ${coin}`, usd: c.usd };
 
   const defiTotal = data.positions.reduce((s, p) => s + posVal(p), 0);
-
-  // If bybit fetch fails, reuse yesterday's value to prevent chart dips.
-  let bybitEquity = bybit?.equity;
-  if (bybitEquity == null) {
-    const history = await getHistory(env, 1);
-    if (history && history.length > 0) {
-      const lastEntry = history[history.length - 1];
-      const lastDate = new Date(lastEntry.date);
-      const todayDate = new Date(day);
-      const diffDays = Math.round((todayDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
-      if (diffDays <= 1 && lastEntry.bybit != null) {
-        bybitEquity = lastEntry.bybit;
-      }
-    }
-  }
-
-  const total = defiTotal + (bybitEquity || 0);
-  const entry = { date: day, total, defi: defiTotal, bybit: bybitEquity || 0, breakdown };
+  const total = defiTotal + (bybit?.equity || 0);
+  const entry = { date: day, total, defi: defiTotal, bybit: bybit?.equity || 0, breakdown };
 
   await env.STATE.put(`hist:${day}`, JSON.stringify(entry)); // no expiration
   const index = (await env.STATE.get("hist:index", "json")) || [];
