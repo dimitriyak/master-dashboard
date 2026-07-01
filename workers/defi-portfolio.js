@@ -114,26 +114,24 @@ export default {
     if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
     try {
-      // Each source is cached separately. If an upstream is slow/empty, keep showing
-      // the last good value instead of silently deleting the protocol from the UI.
-      const source = (key, fn, fallback, valid = v => Array.isArray(v) ? v.length > 0 : !!v) =>
-        cachedSource(key, () => Promise.race([
-          Promise.resolve().then(fn),
-          new Promise(res => setTimeout(() => res(fallback), 16000)),
-        ]), fallback, valid);
+      // Each source is wrapped so one slow/hanging upstream can't stall the whole response.
+      const guard = (p, fallback) => Promise.race([
+        Promise.resolve().then(() => p).catch(() => fallback),
+        new Promise(res => setTimeout(() => res(fallback), 16000)),
+      ]);
       const [aave, morpho, aerodrome, walletTokens, nativeBalances, aaveEthereum, hyperliquid, lighter, loopscale, kodiak, apys, prices] = await Promise.all([
-        source("aave", fetchAave, []),
-        source("morpho", fetchMorpho, []),
-        source("aerodrome", fetchAerodrome, []),
-        source("wallet-tokens", fetchWalletTokens, [], () => true),
-        source("native-balances", fetchNativeBalances, [], () => true),
-        source("aave-ethereum", fetchAaveEthereum, []),
-        source("hyperliquid", fetchHyperliquid, [], () => true),
-        source("lighter", fetchLighter, []),
-        source("loopscale", fetchLoopscale, []),
-        source("kodiak", fetchKodiak, []),
-        source("apys", fetchApys, {}, v => v && Object.keys(v).length > 0),
-        source("prices", fetchAllPrices, {}, v => v && Object.keys(v).length > 0),
+        guard(fetchAave(), []),
+        guard(fetchMorpho(), []),
+        guard(fetchAerodrome(), []),
+        guard(fetchWalletTokens(), []),
+        guard(fetchNativeBalances(), []),
+        guard(fetchAaveEthereum(), []),
+        guard(fetchHyperliquid(), []),
+        guard(fetchLighter(), []),
+        guard(fetchLoopscale(), []),
+        guard(fetchKodiak(), []),
+        guard(fetchApys(), {}),
+        guard(fetchAllPrices(), {}),
       ]);
 
       // LP positions: any non-zero balance counts (LP token amounts are tiny by design)
@@ -160,28 +158,6 @@ export default {
     }
   },
 };
-
-async function cachedSource(key, fetcher, fallback, valid) {
-  const cache = caches.default;
-  const cacheKey = `https://defi-portfolio-cache.internal/source/${key}`;
-  const cached = async () => {
-    const hit = await cache.match(cacheKey);
-    return hit ? hit.json().catch(() => null) : null;
-  };
-
-  try {
-    const fresh = await fetcher();
-    if (valid(fresh)) {
-      await cache.put(cacheKey, new Response(JSON.stringify(fresh), {
-        headers: { "Content-Type": "application/json", "Cache-Control": "max-age=604800" },
-      }));
-      return fresh;
-    }
-  } catch (_) {}
-
-  const last = await cached();
-  return last ?? fallback;
-}
 
 // ── Aave: batch balanceOf per chain ───────────────────────────────────────────
 async function fetchAave() {

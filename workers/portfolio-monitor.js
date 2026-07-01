@@ -19,6 +19,7 @@ const AI_URL    = "https://ai-proxy.dimitriyak.workers.dev";
 
 // Thresholds
 const SWING_PCT      = 5;     // position/total day-over-day change to alert (%)
+const APY_DELTA      = 5;     // APY change in percentage points
 const AAVE_LIQ_THR   = 0.78;  // WBTC liquidation threshold on Aave V3
 const HF_WARN        = 1.6;   // health factor warn / urgent
 const HF_URGENT      = 1.25;
@@ -43,42 +44,11 @@ async function getPortfolio(env) {
 // Tokens Bybit doesn't price (returns $0) — value them via DeFiLlama (key = coingecko id).
 const PRICE_FIX = { GRAM: "coingecko:the-open-network" };
 
-async function bybitCoinPrice(coin, fallback = null) {
-  if (coin === "USDT" || coin === "USDC") return 1;
-  if (PRICE_FIX[coin]) {
-    const pr = await tfetch(`https://coins.llama.fi/prices/current/${PRICE_FIX[coin]}`).then(r => r.json()).catch(() => null);
-    const p = pr?.coins?.[PRICE_FIX[coin]]?.price;
-    if (p > 0) return p;
-  }
-  const d = await tfetch(`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${coin}USDT`)
-    .then(r => r.json()).catch(() => null);
-  const p = Number(d?.result?.list?.[0]?.lastPrice);
-  return p > 0 ? p : fallback;
-}
-
-async function repriceBybitCoins(coins) {
-  const out = {};
-  let equity = 0;
-  for (const [coin, c] of Object.entries(coins || {})) {
-    const amt = Number(c.amt) || 0;
-    if (amt <= 0) continue;
-    const fallback = c.usd && amt ? c.usd / amt : null;
-    const price = await bybitCoinPrice(coin, fallback);
-    const usd = price ? amt * price : Number(c.usd) || 0;
-    if (usd >= 1) {
-      out[coin] = { amt, usd };
-      equity += usd;
-    }
-  }
-  return Object.keys(out).length ? { equity, coins: out, stale: true } : null;
-}
-
 // Bybit: total equity (corrected for unpriced tokens) + per-coin map {coin:{amt,usd}}.
 async function getBybit(env) {
   const d = await env.BYBIT.fetch("https://bybit-proxy/").then(r => r.json()).catch(() => null);
   const acc = d?.result?.list?.[0];
-  const last = await env.STATE.get("bybit:last-good", "json").catch(() => null);
-  if (!acc?.totalEquity) return last?.coins ? await repriceBybitCoins(last.coins) : null;
+  if (!acc?.totalEquity) return null;
   let equity = Number(acc.totalEquity) || 0;
   const coins = {};
   for (const c of (acc.coin || [])) {
@@ -91,11 +61,7 @@ async function getBybit(env) {
     }
     if (usd >= 1) coins[c.coin] = { amt, usd };
   }
-  const result = { equity, coins, stale: false };
-  if (Object.keys(coins).length) {
-    await env.STATE.put("bybit:last-good", JSON.stringify({ ts: Date.now(), coins }), { expirationTtl: 604800 });
-  }
-  return result;
+  return { equity, coins };
 }
 
 async function getBybitEquity(env) {
@@ -212,21 +178,21 @@ async function runAlerts(env) {
     }
   }
 
-  // 3) Swings vs daily baseline. APY/new-position alerts are intentionally
-  // disabled: APY changes belong in the digest, and transient source recovery
-  // can look like a false "new position".
+  // 3) Swings & APY vs daily baseline; new/removed positions
   // 24h-движение токенов всех позиций — чтобы к свингу приписать причину.
   const changes = await tokenChanges(
     Object.values(cur.pos).flatMap(c => assetTokens(c.asset))
   );
   for (const [id, c] of Object.entries(cur.pos)) {
     const b = baseline.pos[id];
-    if (!b) continue;
+    if (!b) { add(`new-${id}`, `🆕 <b>Новая позиция</b>\n${c.name}: $${c.usd.toFixed(0)}`); continue; }
     if (Math.abs(b.usd) > 5) {
       const dpct = (c.usd - b.usd) / Math.abs(b.usd) * 100;
       if (swingConfirmed(c.usd, b.usd, prev?.pos?.[id]?.usd ?? null))
         add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}${reasonLine(c.asset, changes)}`);
     }
+    if (b.apy != null && c.apy != null && Math.abs(c.apy - b.apy) >= APY_DELTA)
+      add(`apy-${id}`, `📊 <b>${c.name}: APY ${c.apy > b.apy ? "вырос" : "упал"}</b>\n${b.apy.toFixed(1)}% → ${c.apy.toFixed(1)}%`);
   }
   for (const id of Object.keys(baseline.pos)) {
     // «закрыта» только если позиция отсутствует и в текущем, и в прошлом снимке —
@@ -250,7 +216,7 @@ async function runAlerts(env) {
   // Только если Bybit реально ответил (есть монеты). Пустой/сбойный ответ
   // НЕ трактуем как «всё продано» — иначе ложные алерты «пропал».
   const bbBase = baseline.bybit, bbCur = cur.bybit || {};
-  if (bbBase && cur.bybitOk && !bybit?.stale) {
+  if (bbBase && cur.bybitOk) {
     for (const [coin, b] of Object.entries(bbBase)) {
       const c = bbCur[coin];
       if (!c) add(`bb-gone-${coin}`, `🔻 <b>Bybit: ${coin} пропал</b>\nБыло ${fmtAmt(b.amt)} (~$${b.usd.toFixed(0)}). Продано / конвертировано / выведено.`);
@@ -275,7 +241,6 @@ async function runAlerts(env) {
 // Index `hist:index` holds the sorted list of dates so we can read a range
 // without relying on KV list(). Breakdown lets the UI explain "из-за чего +/-".
 async function recordHistory(env, { data, bybit }) {
-  const prev = await latestHistory(env);
   const day = today();
   const breakdown = {};
   for (const p of data.positions) {
@@ -289,9 +254,6 @@ async function recordHistory(env, { data, bybit }) {
   const total = defiTotal + (bybit?.equity || 0);
   const entry = { date: day, total, defi: defiTotal, bybit: bybit?.equity || 0, breakdown };
 
-  // Do not overwrite a sane daily point with a partial outage snapshot.
-  if (looksLikePartialHistory(entry, prev)) return { ...prev, skipped: true, reason: "partial snapshot ignored" };
-
   await env.STATE.put(`hist:${day}`, JSON.stringify(entry)); // no expiration
   const index = (await env.STATE.get("hist:index", "json")) || [];
   if (!index.includes(day)) { index.push(day); index.sort(); await env.STATE.put("hist:index", JSON.stringify(index)); }
@@ -302,33 +264,7 @@ async function getHistory(env, days = 0) {
   let index = (await env.STATE.get("hist:index", "json")) || [];
   if (days > 0) index = index.slice(-days);
   const entries = await Promise.all(index.map(d => env.STATE.get(`hist:${d}`, "json")));
-  return filterBadHistory(entries.filter(Boolean));
-}
-
-async function latestHistory(env) {
-  const index = (await env.STATE.get("hist:index", "json")) || [];
-  for (let i = index.length - 1; i >= 0; i--) {
-    const e = await env.STATE.get(`hist:${index[i]}`, "json");
-    if (e) return e;
-  }
-  return null;
-}
-
-function looksLikePartialHistory(entry, prev) {
-  if (!entry || !prev) return false;
-  if ((prev.bybit || 0) > 100 && (entry.bybit || 0) === 0) return true;
-  if ((prev.defi || 0) > 100 && (entry.defi || 0) < prev.defi * 0.75) return true;
-  return false;
-}
-
-function filterBadHistory(entries) {
-  const hasBybit = entries.some(e => (e.bybit || 0) > 100);
-  return entries.filter((e, i) => {
-    if (hasBybit && (e.bybit || 0) === 0) return false;
-    const prev = entries.slice(0, i).reverse().find(x => x && x.defi > 100);
-    if (looksLikePartialHistory(e, prev)) return false;
-    return true;
-  });
+  return entries.filter(Boolean);
 }
 
 // ── Daily AI digest ─────────────────────────────────────────────────────────
