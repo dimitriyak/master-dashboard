@@ -160,6 +160,25 @@ function snapshot(data) {
   return { ts: Date.now(), total, pos };
 }
 
+async function loadLastGoodPortfolio(env) {
+  return await env.STATE.get("portfolio:last-good", "json").catch(() => null);
+}
+
+function looksLikePartialPortfolio(cur, lastGood) {
+  if (!cur || !lastGood || Math.abs(lastGood.total || 0) <= 100) return false;
+  if ((cur.total || 0) < lastGood.total * 0.75) return true;
+
+  let missingUsd = 0;
+  for (const [id, p] of Object.entries(lastGood.pos || {})) {
+    if (Math.abs(p.usd || 0) >= 20 && !cur.pos?.[id]) missingUsd += Math.abs(p.usd || 0);
+  }
+  return missingUsd > Math.abs(lastGood.total || 0) * 0.25;
+}
+
+async function rememberGoodPortfolio(env, cur) {
+  await env.STATE.put("portfolio:last-good", JSON.stringify(cur), { expirationTtl: 604800 });
+}
+
 // ── Alerts ────────────────────────────────────────────────────────────────────
 async function runAlerts(env) {
   const data = await getPortfolio(env);
@@ -167,6 +186,11 @@ async function runAlerts(env) {
   const day = today();
   const bybit = await getBybit(env);
   const cur = snapshot(data);
+  const lastGoodPortfolio = await loadLastGoodPortfolio(env);
+  if (looksLikePartialPortfolio(cur, lastGoodPortfolio)) {
+    return { ok: true, skipped: true, reason: "partial portfolio snapshot ignored" };
+  }
+  await rememberGoodPortfolio(env, cur);
   cur.bybit = bybit?.coins || {};
   cur.bybitOk = !!bybit && Object.keys(cur.bybit).length > 0;
 
@@ -174,6 +198,10 @@ async function runAlerts(env) {
   if (!baseline) {
     await env.STATE.put(`baseline:${day}`, JSON.stringify(cur), { expirationTtl: 172800 });
     return { ok: true, note: "baseline set, no alerts" };
+  }
+  if (looksLikePartialPortfolio(baseline, cur)) {
+    await env.STATE.put(`baseline:${day}`, JSON.stringify(cur), { expirationTtl: 172800 });
+    return { ok: true, note: "partial baseline replaced, no alerts" };
   }
 
   // Предыдущий снимок (прошлый прогон, каждые 30 мин) — для подтверждения свинга.
