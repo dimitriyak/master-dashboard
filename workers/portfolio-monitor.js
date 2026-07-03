@@ -3,7 +3,7 @@
  * Cron-driven monitoring of the DeFi portfolio → Telegram (@dimitriyakclaude_bot).
  *
  * Crons (wrangler triggers):
- *   - "*\/30 * * * *"  → runAlerts  (liquidation risk, big swings, APY changes, new/removed, depeg)
+ *   - "*\/30 * * * *"  → runAlerts  (liquidation risk, big swings, depeg)
  *   - "0 6 * * *"      → runDigest  (daily AI summary + 1-3 ideas via ai-proxy)
  *
  * Secrets:  TELEGRAM_BOT_TOKEN
@@ -228,11 +228,8 @@ async function runAlerts(env) {
         add(`swing-${id}`, `${dpct >= 0 ? "📈" : "📉"} <b>${c.name}</b>\n${dpct >= 0 ? "+" : ""}${dpct.toFixed(1)}% за день · $${b.usd.toFixed(0)} → $${c.usd.toFixed(0)}${reasonLine(c.asset, changes)}`);
     }
   }
-  for (const id of Object.keys(baseline.pos)) {
-    // «закрыта» только если позиция отсутствует и в текущем, и в прошлом снимке —
-    // иначе это разовый разрыв загрузки, а не реальное закрытие.
-    if (!cur.pos[id] && prev && !prev.pos?.[id]) add(`gone-${id}`, `❎ <b>Позиция закрыта</b>\n${baseline.pos[id].name}`);
-  }
+  // Do not alert on missing DeFi positions. A missing id usually means an upstream
+  // RPC/API hiccup, not a real close; closures are visible in the dashboard/digest.
   // total swing
   if (Math.abs(baseline.total) > 5) {
     const dpct = (cur.total - baseline.total) / Math.abs(baseline.total) * 100;
