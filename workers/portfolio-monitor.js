@@ -247,7 +247,7 @@ async function runAlerts(env) {
   // Только если Bybit реально ответил (есть монеты). Пустой/сбойный ответ
   // НЕ трактуем как «всё продано» — иначе ложные алерты «пропал».
   const bbBase = baseline.bybit, bbCur = cur.bybit || {};
-  if (bbBase && cur.bybitOk && !bybit?.stale) {
+  if (baseline.bybitOk && bbBase && cur.bybitOk && !bybit?.stale) {
     for (const [coin, b] of Object.entries(bbBase)) {
       const c = bbCur[coin];
       if (!c) add(`bb-gone-${coin}`, `🔻 <b>Bybit: ${coin} пропал</b>\nБыло ${fmtAmt(b.amt)} (~$${b.usd.toFixed(0)}). Продано / конвертировано / выведено.`);
