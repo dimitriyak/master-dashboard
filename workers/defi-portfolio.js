@@ -104,6 +104,7 @@ const MANUAL_POSITIONS = [
     apy: 7.55,
     type: "lp",
     color: "#FF0420",
+    aeroEarned: 0.00087,
   },
   {
     id: "aero-weth-aero-cl",
@@ -115,6 +116,7 @@ const MANUAL_POSITIONS = [
     apy: 1146.97,
     type: "lp",
     color: "#FF0420",
+    aeroEarned: 0.00238,
   },
 ];
 
@@ -674,14 +676,17 @@ async function fetchLoopscaleEarn() {
 }
 
 async function fetchLoopscale() {
-  const res = await tfetch(LOOPSCALE_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
-  }).then(r => r.json()).catch(() => null);
+  const [res, earn] = await Promise.all([
+    tfetch(LOOPSCALE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
+    }).then(r => r.json()).catch(() => null),
+    fetchLoopscaleEarn(),
+  ]);
 
   const items = Array.isArray(res?.items) ? res.items : [];
-  if (items.length === 0) return [];
+  if (items.length === 0 && !earn) return [];
 
   const loops = [];
   let totalEquity = 0, yieldSum = 0, costSum = 0;
@@ -715,10 +720,11 @@ async function fetchLoopscale() {
   }
 
   const rows = [...loops];
+  if (earn) { rows.push(earn); totalEquity += earn.usd; }
 
   if (rows.length === 0) return [];
 
-  // Card APY: value-weighted over active loop rows.
+  // Card APY: value-weighted over rows that have a known APY.
   const apyRows = rows.filter(r => r.apy != null);
   const apyW = apyRows.reduce((s, r) => s + (r.usd ?? r.equity), 0);
   const netApy = apyW > 0 ? round(apyRows.reduce((s, r) => s + r.apy * (r.usd ?? r.equity), 0) / apyW) : null;
