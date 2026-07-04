@@ -93,6 +93,20 @@ const LLAMA_POOLS = [
   { posId: "aero-usdc-aero",            poolId: "d32f9c01-47d1-4077-8c73-8b91b08d1e91" },
 ];
 
+const MANUAL_POSITIONS = [
+  {
+    id: "aero-weth-aero-cl",
+    chain: "base",
+    protocol: "Aerodrome",
+    asset: "WETH/AERO CL",
+    balance: 211.79,
+    usdValue: 211.79,
+    apy: 1146.97,
+    type: "lp",
+    color: "#FF0420",
+  },
+];
+
 async function fetchApys() {
   const results = await Promise.allSettled(
     LLAMA_POOLS.map(p =>
@@ -141,7 +155,8 @@ export default {
         .concat(hyperliquid)
         .concat(lighter)
         .concat(loopscale)
-        .concat(kodiak);
+        .concat(kodiak)
+        .concat(MANUAL_POSITIONS);
 
       // Attach APY from DeFiLlama where available
       const positions = allPositions.map(p => apys[p.id] != null ? { ...p, apy: apys[p.id] } : p);
