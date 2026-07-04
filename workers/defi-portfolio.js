@@ -142,7 +142,7 @@ export default {
         guard(fetchAaveEthereum(), []),
         guard(fetchHyperliquid(), []),
         guard(fetchLighter(), []),
-        [],
+        guard(fetchLoopscale(), []),
         [],
         guard(fetchApys(), {}),
         guard(fetchAllPrices(), {}),
@@ -663,17 +663,14 @@ async function fetchLoopscaleEarn() {
 }
 
 async function fetchLoopscale() {
-  const [res, earn] = await Promise.all([
-    tfetch(LOOPSCALE_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
-    }).then(r => r.json()).catch(() => null),
-    fetchLoopscaleEarn(),
-  ]);
+  const res = await tfetch(LOOPSCALE_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
+  }).then(r => r.json()).catch(() => null);
 
   const items = Array.isArray(res?.items) ? res.items : [];
-  if (items.length === 0 && !earn) return [];
+  if (items.length === 0) return [];
 
   const loops = [];
   let totalEquity = 0, yieldSum = 0, costSum = 0;
@@ -706,13 +703,11 @@ async function fetchLoopscale() {
     });
   }
 
-  // Earn (OnRe Growth) row + value.
   const rows = [...loops];
-  if (earn) { rows.push(earn); totalEquity += earn.usd; }
 
   if (rows.length === 0) return [];
 
-  // Card APY: value-weighted over rows that have a known APY (Earn has none live → excluded).
+  // Card APY: value-weighted over active loop rows.
   const apyRows = rows.filter(r => r.apy != null);
   const apyW = apyRows.reduce((s, r) => s + (r.usd ?? r.equity), 0);
   const netApy = apyW > 0 ? round(apyRows.reduce((s, r) => s + r.apy * (r.usd ?? r.equity), 0) / apyW) : null;
