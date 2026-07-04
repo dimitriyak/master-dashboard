@@ -465,6 +465,7 @@ function ProtocolCard({ group }) {
       rows.push({ key: it.id, label: it.asset, usd: val, apy: it.liveApy, invested: it.invested, date: it.date, isDebt, pnl: rowPnl, live: isOnChain, rewards: it.liveRewards });
     }
   }
+  rows.sort((a, b) => (b.usd ?? 0) - (a.usd ?? 0));
 
   return (
     <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 14, position: "relative", overflow: "hidden" }}>
