@@ -194,7 +194,7 @@ export const protocolIcon = (protocol) => {
 export const PROTOCOL_URLS = {
   "aave":        "https://app.aave.com",
   "morpho":      "https://app.morpho.org",
-  "aerodrome":   "https://aerodrome.finance/dashboard",
+  "aerodrome":   "https://aerodrome.finance/dash",
   "hyperliquid": "https://app.hyperliquid.xyz/portfolio",
   "lighter":     "https://app.lighter.xyz/portfolio",
   "loopscale":   "https://app.loopscale.com/portfolio",
