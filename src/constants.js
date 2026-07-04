@@ -34,6 +34,7 @@ export const DEFI_INITIAL = [
   { id: 13,protocol: "Aerodrome",    network: "Base",         asset: "WETH/AERO CL", invested: 211.79, current: 211.79, apy: 1146.97, status: "active", type: "lp", color: "#5D7EFD", matchId: "aero-weth-aero-cl", date: "2026-07-04", costBasis: [{ t: "WETH", qty: 0.05397 }, { t: "AERO", qty: 208.99 }] },
   { id: 6, protocol: "Lighter",      network: "Lighter",      asset: "Public Pools",invested: 185, current: 0, apy: 0, status: "active", type: "vault",   color: "#4B8BFF", matchId: "lighter-public-pools", date: "2026-06-14" },
   { id: 8, protocol: "Loopscale",    network: "Solana",       asset: "ONyc Loop",   invested: 331.22, current: 331.22, apy: 0, status: "active", type: "vault",   color: "#6C63FF", matchId: "loopscale-loops", date: "2026-06-14" },
+  { id: 14,protocol: "Loopscale",    network: "Solana",       asset: "OnRe Growth", invested: 99.78, current: 99.78, apy: 0, status: "active", type: "vault",   color: "#6C63FF", matchId: "loopscale-growth", date: "2026-06-14" },
 ];
 
 export const WAY_INITIAL = {

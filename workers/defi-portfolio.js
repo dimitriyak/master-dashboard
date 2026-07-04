@@ -95,6 +95,16 @@ const LLAMA_POOLS = [
 
 const MANUAL_POSITIONS = [
   {
+    id: "loopscale-growth",
+    chain: "solana",
+    protocol: "Loopscale",
+    asset: "OnRe Growth",
+    balance: 99.78,
+    usdValue: 99.78,
+    type: "vault",
+    color: "#14F195",
+  },
+  {
     id: "aero-msusd-usdc-cl",
     chain: "base",
     protocol: "Aerodrome",
@@ -676,17 +686,14 @@ async function fetchLoopscaleEarn() {
 }
 
 async function fetchLoopscale() {
-  const [res, earn] = await Promise.all([
-    tfetch(LOOPSCALE_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
-    }).then(r => r.json()).catch(() => null),
-    fetchLoopscaleEarn(),
-  ]);
+  const res = await tfetch(LOOPSCALE_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ borrowers: [LOOPSCALE_BORROWER], filterType: 0, page: 0, pageSize: 25 }),
+  }).then(r => r.json()).catch(() => null);
 
   const items = Array.isArray(res?.items) ? res.items : [];
-  if (items.length === 0 && !earn) return [];
+  if (items.length === 0) return [];
 
   const loops = [];
   let totalEquity = 0, yieldSum = 0, costSum = 0;
@@ -720,7 +727,6 @@ async function fetchLoopscale() {
   }
 
   const rows = [...loops];
-  if (earn) { rows.push(earn); totalEquity += earn.usd; }
 
   if (rows.length === 0) return [];
 
