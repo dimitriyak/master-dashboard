@@ -128,8 +128,8 @@ export default {
         guard(fetchAaveEthereum(), []),
         guard(fetchHyperliquid(), []),
         guard(fetchLighter(), []),
-        guard(fetchLoopscale(), []),
-        guard(fetchKodiak(), []),
+        [],
+        [],
         guard(fetchApys(), {}),
         guard(fetchAllPrices(), {}),
       ]);
