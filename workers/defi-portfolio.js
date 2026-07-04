@@ -607,8 +607,10 @@ async function fetchLoopscaleEarn() {
     solRpc("getTokenAccountBalance", [ONRE_EARN_ATA]),
     solRpc("getAccountInfo", [ONRE_EARN_VAULT, { encoding: "base64" }]),
   ]);
-  const shares = Number(bal?.value?.amount || 0);
-  if (!shares || !vault?.value?.data?.[0]) return await lastGood();
+  const rawShares = bal?.value?.amount;
+  const shares = Number(rawShares || 0);
+  if (rawShares != null && shares <= 0) return null;
+  if (!rawShares || !vault?.value?.data?.[0]) return await lastGood();
   const buf = Uint8Array.from(atob(vault.value.data[0]), c => c.charCodeAt(0));
   const u64 = (off) => { const dv = new DataView(buf.buffer); return Number(dv.getBigUint64(off, true)); };
   const assets = u64(ONRE_VAULT_ASSETS_OFFSET);
