@@ -95,6 +95,17 @@ const LLAMA_POOLS = [
 
 const MANUAL_POSITIONS = [
   {
+    id: "aero-msusd-usdc-cl",
+    chain: "base",
+    protocol: "Aerodrome",
+    asset: "msUSD/USDC CL",
+    balance: 400.49,
+    usdValue: 400.49,
+    apy: 7.55,
+    type: "lp",
+    color: "#FF0420",
+  },
+  {
     id: "aero-weth-aero-cl",
     chain: "base",
     protocol: "Aerodrome",

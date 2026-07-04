@@ -26,7 +26,7 @@ export const WISH_CATEGORIES = [
 ];
 
 export const DEFI_INITIAL = [
-  { id: 1, protocol: "Morpho",       network: "Base",         asset: "USDC",       invested: 400, current: 0, apy: 0, status: "active", type: "lending", color: "#7C5CFC", date: "2026-06-12" },
+  { id: 1, protocol: "Aerodrome",    network: "Base",         asset: "msUSD/USDC CL", invested: 400.49, current: 400.49, apy: 7.55, status: "active", type: "lp", color: "#5D7EFD", matchId: "aero-msusd-usdc-cl", date: "2026-07-04" },
   { id: 2, protocol: "Aerodrome",    network: "Base",         asset: "USDC/WETH",  invested: 400, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-usdc-weth", date: "2026-06-13", costBasis: [{ t: "WETH", qty: 0.12, p0: 1666.89 }] },
   { id: 10,protocol: "Aerodrome",    network: "Base",         asset: "USDC/AERO",  invested: 186, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-usdc-aero", date: "2026-06-15", costBasis: [{ t: "AERO", qty: 229.7, p0: 0.376 }] },
   { id: 11,protocol: "Aerodrome",    network: "Base",         asset: "WETH/VVV",   invested: 300, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-weth-vvv", date: "2026-06-23" },
