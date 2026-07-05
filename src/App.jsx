@@ -406,8 +406,8 @@ function ProtocolIcon({ protocol, type, color }) {
 }
 
 const fmtDate = (d) => { if (!d) return null; const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
-const fmtUsd = (v) => v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${(v ?? 0).toFixed(2)}`;
-const fmtPnl = (v) => `${v >= 0 ? "+" : ""}${Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(0)}$`;
+const fmtUsd = (v) => Number.isFinite(v) ? (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`) : "$0.00";
+const fmtPnl = (v) => Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(0)}$` : "+0.00$";
 
 // Distribution as a horizontal bar chart: row per protocol — clickable icon+name → dashboard,
 // proportional bar, value. Sorted by portfolio size.
@@ -1005,7 +1005,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
         if (!p.costBasis) return s;
         return s + p.costBasis.reduce((g, c) => {
           const now = px[c.t];
-          if (now == null) return g;
+          if (!Number.isFinite(now) || !Number.isFinite(c.qty) || !Number.isFinite(c.p0)) return g;
           hasGrowth = true;
           return g + c.qty * (now - c.p0);
         }, 0);

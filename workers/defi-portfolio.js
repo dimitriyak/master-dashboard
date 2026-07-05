@@ -182,7 +182,13 @@ export default {
         .concat(MANUAL_POSITIONS);
 
       // Attach APY from DeFiLlama where available
-      const positions = allPositions.map(p => apys[p.id] != null ? { ...p, apy: apys[p.id] } : p);
+      const positions = allPositions.map(p => {
+        const withApy = apys[p.id] != null ? { ...p, apy: apys[p.id] } : p;
+        if (withApy.aeroEarned != null && withApy.aeroEarnedUsd == null && prices.AERO > 0) {
+          return { ...withApy, aeroEarnedUsd: round(withApy.aeroEarned * prices.AERO) };
+        }
+        return withApy;
+      });
 
       return json({
         wallet: WALLET,
