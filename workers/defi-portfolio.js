@@ -105,6 +105,10 @@ const AERO_CL_POSITIONS = [
   },
 ];
 
+const AERO_VE = "0xeBf418fe2512E7E6bd9b87a8F0f294acDc67e6B4";
+const AERO_VE_LOCK_IDS = [122995, 122996];
+const AERO_VE_REBASE_APR = 2.30886;
+
 // Chainlink ETH/USD on Base — latestAnswer() returns price * 1e8
 const CHAINLINK_ETH_USD = "0x71041dddad3595F9CEd3dCCFBe3D1F4b0a16Bb70";
 
@@ -176,7 +180,7 @@ export default {
 
       // LP positions: any non-zero balance counts (LP token amounts are tiny by design)
       const allPositions = [...aave, ...morpho].filter(p => p.balance >= 0.01)
-        .concat(aerodrome.filter(p => p.cl || p.staked > 0 || p.unstaked > 0))
+        .concat(aerodrome.filter(p => p.cl || p.type === "vault" || p.staked > 0 || p.unstaked > 0))
         .concat(aaveEthereum)
         .concat(hyperliquid)
         .concat(lighter)
@@ -330,8 +334,11 @@ async function fetchAerodrome() {
              aeroEarnedUsd };
   });
 
-  const clPositions = await fetchAerodromeCl(ethPrice, aeroPrice);
-  return v2Positions.concat(clPositions);
+  const [clPositions, veLocks] = await Promise.all([
+    fetchAerodromeCl(ethPrice, aeroPrice),
+    fetchAerodromeVeLocks(aeroPrice),
+  ]);
+  return v2Positions.concat(clPositions, veLocks);
 }
 
 async function fetchAerodromeCl(ethPrice, aeroPrice) {
@@ -393,6 +400,66 @@ async function fetchAerodromeCl(ethPrice, aeroPrice) {
       aeroEarnedUsd,
     }];
   });
+}
+
+async function fetchAerodromeVeLocks(aeroPrice) {
+  const LOCKED_SEL = "0xb45a3c0e";       // locked(uint256) -> amount,end
+  const BALANCE_NFT_SEL = "0xe7e242d4";  // balanceOfNFT(uint256) voting power
+  const OWNER_OF_SEL = "0x6352211e";
+  const wallet = WALLET.toLowerCase();
+
+  const batch = [];
+  AERO_VE_LOCK_IDS.forEach((id, i) => {
+    const tokenHex = hexUint(id);
+    batch.push({ jsonrpc: "2.0", id: i * 3,     method: "eth_call", params: [{ to: AERO_VE, data: OWNER_OF_SEL + tokenHex }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 3 + 1, method: "eth_call", params: [{ to: AERO_VE, data: LOCKED_SEL + tokenHex }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 3 + 2, method: "eth_call", params: [{ to: AERO_VE, data: BALANCE_NFT_SEL + tokenHex }, "latest"] });
+  });
+
+  const res = await rpcCall("base", batch);
+  if (!Array.isArray(res)) return [];
+
+  const locks = AERO_VE_LOCK_IDS.flatMap((id, i) => {
+    const ownerHex = res.find(r => r.id === i * 3)?.result;
+    const lockedHex = res.find(r => r.id === i * 3 + 1)?.result;
+    if (!ownerHex || ownerHex === "0x" || !lockedHex || lockedHex === "0x") return [];
+    const owner = "0x" + ownerHex.slice(-40).toLowerCase();
+    if (owner !== wallet) return [];
+
+    const ws = words(lockedHex);
+    if (ws.length < 2) return [];
+    const amount = Number(BigInt("0x" + ws[0])) / 1e18;
+    const end = Number(BigInt("0x" + ws[1]));
+    if (!(amount > 0)) return [];
+
+    const votingPowerHex = res.find(r => r.id === i * 3 + 2)?.result;
+    const votingPower = votingPowerHex && votingPowerHex !== "0x"
+      ? Number(BigInt(votingPowerHex)) / 1e18
+      : null;
+
+    return [{
+      tokenId: id,
+      amount: roundToken(amount),
+      end,
+      votingPower: votingPower != null ? roundToken(votingPower) : null,
+    }];
+  });
+
+  const totalAero = locks.reduce((s, l) => s + l.amount, 0);
+  if (!(totalAero > 0)) return [];
+
+  return [{
+    id: "aero-velocks",
+    protocol: "Aerodrome",
+    chain: "Base",
+    asset: "veAERO Locks",
+    balance: roundToken(totalAero),
+    usdValue: aeroPrice > 0 ? round(totalAero * aeroPrice) : null,
+    apy: AERO_VE_REBASE_APR,
+    type: "vault",
+    color: "#FF0420",
+    locks,
+  }];
 }
 
 // ── Wallet tokens (idle capital tracker) ─────────────────────────────────────
@@ -942,6 +1009,8 @@ function groupBy(arr, fn) {
 }
 
 function round(n) { return Math.round(n * 100) / 100; }
+
+function roundToken(n) { return Math.round(n * 100000) / 100000; }
 
 function hexUint(n) {
   return BigInt(n).toString(16).padStart(64, "0");
