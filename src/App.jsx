@@ -408,6 +408,7 @@ function ProtocolIcon({ protocol, type, color }) {
 const fmtDate = (d) => { if (!d) return null; const [y, m, day] = d.split("-"); return `${day}.${m}.${y}`; };
 const fmtUsd = (v) => Number.isFinite(v) ? (v < 0 ? `-$${Math.abs(v).toFixed(2)}` : `$${v.toFixed(2)}`) : "$0.00";
 const fmtPnl = (v) => Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(0)}$` : "+0.00$";
+const fmtRewardUsd = (v) => Number.isFinite(v) ? (v < 0.01 ? v.toFixed(4) : v.toFixed(2)) : null;
 
 // Distribution as a horizontal bar chart: row per protocol — clickable icon+name → dashboard,
 // proportional bar, value. Sorted by portfolio size.
@@ -509,7 +510,7 @@ function ProtocolCard({ group }) {
               </div>
               {r.rewards?.aeroEarned > 0 && (
                 <div style={{ fontSize: 9, color: "#FFD700", fontFamily: "monospace", marginTop: 2 }}>
-                  ⚡ {r.rewards.aeroEarned} AERO{r.rewards.aeroEarnedUsd != null ? ` ≈$${r.rewards.aeroEarnedUsd}` : ""}
+                  ⚡ {r.rewards.aeroEarned} AERO{r.rewards.aeroEarnedUsd != null ? ` ≈$${fmtRewardUsd(r.rewards.aeroEarnedUsd)}` : ""}
                 </div>
               )}
             </div>

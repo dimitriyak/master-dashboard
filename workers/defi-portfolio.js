@@ -185,7 +185,7 @@ export default {
       const positions = allPositions.map(p => {
         const withApy = apys[p.id] != null ? { ...p, apy: apys[p.id] } : p;
         if (withApy.aeroEarned != null && withApy.aeroEarnedUsd == null && prices.AERO > 0) {
-          return { ...withApy, aeroEarnedUsd: round(withApy.aeroEarned * prices.AERO) };
+          return { ...withApy, aeroEarnedUsd: Math.round(withApy.aeroEarned * prices.AERO * 10000) / 10000 };
         }
         return withApy;
       });
