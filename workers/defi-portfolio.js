@@ -80,6 +80,31 @@ const AERO_POOLS = [
   { id: "aero-weth-vvv",   asset: "WETH/VVV",   lpToken: "0x01784ef301D79e4B2DF3a21ad9a536d4cF09A5Ce", gauge: "0x37a70295fcefebBB0a29735A53E2e6786a02F930", decimals: 18, color: "#FF0420", t0: { dec: 18, price: "eth" },    t1: { dec: 18, price: "skip" }   },
 ];
 
+// Aerodrome Slipstream CL positions are NFTs, not ERC20 LP tokens.
+// tokenId is enough to read liquidity from the NFT manager; gauge stores claimable emissions.
+const AERO_CL_POSITIONS = [
+  {
+    id: "aero-msusd-usdc-cl",
+    asset: "msUSD/USDC CL",
+    nftManager: "0x827922686190790b37229fd06084350E74485b72",
+    tokenId: 72742550,
+    pool: "0x7501bc8bb51616f79bfa524e464fb7b41f0b10fb",
+    gauge: "0x3d86aed6ecc8daf71c8b50d06f38455b663265d8",
+    t0: { dec: 18, price: "stable" },
+    t1: { dec: 6,  price: "stable" },
+  },
+  {
+    id: "aero-weth-aero-cl",
+    asset: "WETH/AERO CL",
+    nftManager: "0xe1f8cd9ac4e4a65f54f38a5cdafca44f6dd68b53",
+    tokenId: 2084506,
+    pool: "0x4e506648d493c8870f55e870480f92f2f33ece51",
+    gauge: "0x956495c06ba757cdf85f73b5f6d5ccb505d288f1",
+    t0: { dec: 18, price: "eth" },
+    t1: { dec: 18, price: "aero" },
+  },
+];
+
 // Chainlink ETH/USD on Base — latestAnswer() returns price * 1e8
 const CHAINLINK_ETH_USD = "0x71041dddad3595F9CEd3dCCFBe3D1F4b0a16Bb70";
 
@@ -91,6 +116,8 @@ const LLAMA_POOLS = [
   { posId: "morpho-base-usdc-steak-v2", poolId: "7820bd3c-461a-4811-9f0b-1d39c1503c3f" },
   { posId: "aero-usdc-weth",            poolId: "e8cb4dbb-9e66-4cfa-9c77-407118b128a0" },
   { posId: "aero-usdc-aero",            poolId: "d32f9c01-47d1-4077-8c73-8b91b08d1e91" },
+  { posId: "aero-msusd-usdc-cl",         poolId: "aae6cc3a-783b-4a76-bea7-c3edccd28d62" },
+  { posId: "aero-weth-aero-cl",          poolId: "3aebe700-db0b-49e2-82f6-564acdfae434" },
 ];
 
 const MANUAL_POSITIONS = [
@@ -103,30 +130,6 @@ const MANUAL_POSITIONS = [
     usdValue: 99.78,
     type: "vault",
     color: "#14F195",
-  },
-  {
-    id: "aero-msusd-usdc-cl",
-    chain: "base",
-    protocol: "Aerodrome",
-    asset: "msUSD/USDC CL",
-    balance: 400.49,
-    usdValue: 400.49,
-    apy: 7.55,
-    type: "lp",
-    color: "#FF0420",
-    aeroEarned: 0.00087,
-  },
-  {
-    id: "aero-weth-aero-cl",
-    chain: "base",
-    protocol: "Aerodrome",
-    asset: "WETH/AERO CL",
-    balance: 211.79,
-    usdValue: 211.79,
-    apy: 1146.97,
-    type: "lp",
-    color: "#FF0420",
-    aeroEarned: 0.00238,
   },
 ];
 
@@ -173,7 +176,7 @@ export default {
 
       // LP positions: any non-zero balance counts (LP token amounts are tiny by design)
       const allPositions = [...aave, ...morpho].filter(p => p.balance >= 0.01)
-        .concat(aerodrome.filter(p => p.staked > 0 || p.unstaked > 0))
+        .concat(aerodrome.filter(p => p.cl || p.staked > 0 || p.unstaked > 0))
         .concat(aaveEthereum)
         .concat(hyperliquid)
         .concat(lighter)
@@ -247,8 +250,6 @@ async function fetchAerodrome() {
     return (rawLp && rawLp !== "0x" && BigInt(rawLp) > 0n) || (rawGauge && rawGauge !== "0x" && BigInt(rawGauge) > 0n);
   });
 
-  if (active.length === 0) return [];
-
   const EARNED_SEL = "0x008cc262"; // earned(address) → claimable AERO
   // AERO/USDC vAMM pool on Base — use reserves to derive AERO price
   const AERO_USDC_POOL = "0x6cDcb1C4A4D1C3C6d054b27AC5B77e89eAFb971d";
@@ -278,7 +279,7 @@ async function fetchAerodrome() {
     if (r1 > 0) aeroPrice = (r0 / 1e6) / (r1 / 1e18);
   }
 
-  return active.map((pool, ai) => {
+  const v2Positions = active.map((pool, ai) => {
     const poolIdx = AERO_POOLS.indexOf(pool);
     const rawLp    = res1.find(r => r.id === poolIdx * 2)?.result;
     const rawGauge = res1.find(r => r.id === poolIdx * 2 + 1)?.result;
@@ -327,6 +328,70 @@ async function fetchAerodrome() {
              usdValue:       usdValue   != null ? Math.round(usdValue * 100) / 100 : null,
              aeroEarned,
              aeroEarnedUsd };
+  });
+
+  const clPositions = await fetchAerodromeCl(ethPrice, aeroPrice);
+  return v2Positions.concat(clPositions);
+}
+
+async function fetchAerodromeCl(ethPrice, aeroPrice) {
+  const POSITIONS_SEL = "0x99fbab88"; // positions(uint256)
+  const SLOT0_SEL = "0x3850c7bd";     // slot0()
+  const EARNED_TOKEN_SEL = "0x3e491d47"; // earned(address,uint256)
+  const walletHex = WALLET.toLowerCase().replace("0x", "").padStart(64, "0");
+
+  const batch = [];
+  AERO_CL_POSITIONS.forEach((p, i) => {
+    const tokenHex = hexUint(p.tokenId);
+    batch.push({ jsonrpc: "2.0", id: i * 3,     method: "eth_call", params: [{ to: p.nftManager, data: POSITIONS_SEL + tokenHex }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 3 + 1, method: "eth_call", params: [{ to: p.pool,       data: SLOT0_SEL }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 3 + 2, method: "eth_call", params: [{ to: p.gauge,      data: EARNED_TOKEN_SEL + walletHex + tokenHex }, "latest"] });
+  });
+
+  const res = await rpcCall("base", batch);
+  if (!Array.isArray(res)) return [];
+
+  return AERO_CL_POSITIONS.flatMap((p, i) => {
+    const posHex = res.find(r => r.id === i * 3)?.result;
+    const slot0Hex = res.find(r => r.id === i * 3 + 1)?.result;
+    if (!posHex || posHex === "0x" || !slot0Hex || slot0Hex === "0x") return [];
+
+    const pos = words(posHex);
+    const slot0 = words(slot0Hex);
+    if (pos.length < 8 || slot0.length < 2) return [];
+
+    const tickLower = signedWord(pos[5]);
+    const tickUpper = signedWord(pos[6]);
+    const liquidity = Number(BigInt("0x" + pos[7]));
+    const tick = signedWord(slot0[1]);
+    const [amount0, amount1] = clAmounts(liquidity, tick, tickLower, tickUpper, p.t0.dec, p.t1.dec);
+    const usdValue = tokenUsd(p.t0, amount0, ethPrice, aeroPrice) + tokenUsd(p.t1, amount1, ethPrice, aeroPrice);
+
+    let aeroEarned = null, aeroEarnedUsd = null;
+    const earnedHex = res.find(r => r.id === i * 3 + 2)?.result;
+    if (earnedHex && earnedHex !== "0x") {
+      aeroEarned = Math.round(Number(BigInt(earnedHex)) / 1e18 * 100000) / 100000;
+      if (aeroPrice > 0) aeroEarnedUsd = Math.round(aeroEarned * aeroPrice * 10000) / 10000;
+    }
+
+    return [{
+      id: p.id,
+      protocol: "Aerodrome",
+      chain: "Base",
+      asset: p.asset,
+      balance: 1,
+      staked: 1,
+      unstaked: 0,
+      color: "#FF0420",
+      type: "lp",
+      cl: true,
+      tokenId: p.tokenId,
+      amount0: round(amount0),
+      amount1: round(amount1),
+      usdValue: Math.round(usdValue * 100) / 100,
+      aeroEarned,
+      aeroEarnedUsd,
+    }];
   });
 }
 
@@ -877,6 +942,55 @@ function groupBy(arr, fn) {
 }
 
 function round(n) { return Math.round(n * 100) / 100; }
+
+function hexUint(n) {
+  return BigInt(n).toString(16).padStart(64, "0");
+}
+
+function words(hex) {
+  const clean = hex.replace(/^0x/, "");
+  const out = [];
+  for (let i = 0; i + 64 <= clean.length; i += 64) out.push(clean.slice(i, i + 64));
+  return out;
+}
+
+function signedWord(word) {
+  const v = BigInt("0x" + word);
+  const limit = 1n << 255n;
+  const full = 1n << 256n;
+  return Number(v >= limit ? v - full : v);
+}
+
+function sqrtRatioAtTick(tick) {
+  return Math.sqrt(Math.pow(1.0001, tick)) * 2 ** 96;
+}
+
+function clAmounts(liquidity, tick, tickLower, tickUpper, dec0, dec1) {
+  const q96 = 2 ** 96;
+  const sqrtP = sqrtRatioAtTick(tick);
+  const sqrtA = sqrtRatioAtTick(tickLower);
+  const sqrtB = sqrtRatioAtTick(tickUpper);
+  let amount0 = 0;
+  let amount1 = 0;
+
+  if (tick < tickLower) {
+    amount0 = liquidity * (sqrtB - sqrtA) * q96 / (sqrtA * sqrtB);
+  } else if (tick >= tickUpper) {
+    amount1 = liquidity * (sqrtB - sqrtA) / q96;
+  } else {
+    amount0 = liquidity * (sqrtB - sqrtP) * q96 / (sqrtP * sqrtB);
+    amount1 = liquidity * (sqrtP - sqrtA) / q96;
+  }
+
+  return [amount0 / 10 ** dec0, amount1 / 10 ** dec1];
+}
+
+function tokenUsd(token, amount, ethPrice, aeroPrice) {
+  if (token.price === "stable") return amount;
+  if (token.price === "eth") return amount * ethPrice;
+  if (token.price === "aero") return amount * aeroPrice;
+  return 0;
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
