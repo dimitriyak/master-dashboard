@@ -106,7 +106,8 @@ const AERO_CL_POSITIONS = [
 ];
 
 const AERO_VE = "0xeBf418fe2512E7E6bd9b87a8F0f294acDc67e6B4";
-const AERO_VE_LOCK_IDS = [122995, 122996];
+const AERO_TOKEN = "0x940181a94A35A4569E4529A3CDfB74e38FD98631";
+const AERO_VE_LOCK_IDS = [122660, 122995, 122996];
 const AERO_VE_REBASE_APR = 2.30886;
 
 // Chainlink ETH/USD on Base — latestAnswer() returns price * 1e8
@@ -406,22 +407,29 @@ async function fetchAerodromeVeLocks(aeroPrice) {
   const LOCKED_SEL = "0xb45a3c0e";       // locked(uint256) -> amount,end
   const BALANCE_NFT_SEL = "0xe7e242d4";  // balanceOfNFT(uint256) voting power
   const OWNER_OF_SEL = "0x6352211e";
+  const ID_TO_MANAGED_SEL = "0x19a0a9d5"; // idToManaged(uint256)
+  const WEIGHTS_SEL = "0x515857d4";       // weights(uint256,uint256)
+  const MANAGED_TO_LOCKED_SEL = "0xa738da82";
+  const EARNED_TOKEN_SEL = "0x3e491d47";  // earned(address,uint256)
   const wallet = WALLET.toLowerCase();
+  const aeroHex = AERO_TOKEN.toLowerCase().replace("0x", "").padStart(64, "0");
 
   const batch = [];
   AERO_VE_LOCK_IDS.forEach((id, i) => {
     const tokenHex = hexUint(id);
-    batch.push({ jsonrpc: "2.0", id: i * 3,     method: "eth_call", params: [{ to: AERO_VE, data: OWNER_OF_SEL + tokenHex }, "latest"] });
-    batch.push({ jsonrpc: "2.0", id: i * 3 + 1, method: "eth_call", params: [{ to: AERO_VE, data: LOCKED_SEL + tokenHex }, "latest"] });
-    batch.push({ jsonrpc: "2.0", id: i * 3 + 2, method: "eth_call", params: [{ to: AERO_VE, data: BALANCE_NFT_SEL + tokenHex }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 4,     method: "eth_call", params: [{ to: AERO_VE, data: OWNER_OF_SEL + tokenHex }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 4 + 1, method: "eth_call", params: [{ to: AERO_VE, data: LOCKED_SEL + tokenHex }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 4 + 2, method: "eth_call", params: [{ to: AERO_VE, data: BALANCE_NFT_SEL + tokenHex }, "latest"] });
+    batch.push({ jsonrpc: "2.0", id: i * 4 + 3, method: "eth_call", params: [{ to: AERO_VE, data: ID_TO_MANAGED_SEL + tokenHex }, "latest"] });
   });
 
   const res = await rpcCall("base", batch);
   if (!Array.isArray(res)) return [];
 
-  const locks = AERO_VE_LOCK_IDS.flatMap((id, i) => {
-    const ownerHex = res.find(r => r.id === i * 3)?.result;
-    const lockedHex = res.find(r => r.id === i * 3 + 1)?.result;
+  const managedBatch = [];
+  const initialLocks = AERO_VE_LOCK_IDS.flatMap((id, i) => {
+    const ownerHex = res.find(r => r.id === i * 4)?.result;
+    const lockedHex = res.find(r => r.id === i * 4 + 1)?.result;
     if (!ownerHex || ownerHex === "0x" || !lockedHex || lockedHex === "0x") return [];
     const owner = "0x" + ownerHex.slice(-40).toLowerCase();
     if (owner !== wallet) return [];
@@ -430,9 +438,20 @@ async function fetchAerodromeVeLocks(aeroPrice) {
     if (ws.length < 2) return [];
     const amount = Number(BigInt("0x" + ws[0])) / 1e18;
     const end = Number(BigInt("0x" + ws[1]));
-    if (!(amount > 0)) return [];
+    if (!(amount > 0)) {
+      const managedHex = res.find(r => r.id === i * 4 + 3)?.result;
+      const managedId = managedHex && managedHex !== "0x" ? Number(BigInt(managedHex)) : 0;
+      if (managedId > 0) {
+        const tokenHex = hexUint(id);
+        managedBatch.push({ jsonrpc: "2.0", id: i * 3,     method: "eth_call", params: [{ to: AERO_VE, data: WEIGHTS_SEL + tokenHex + hexUint(managedId) }, "latest"] });
+        managedBatch.push({ jsonrpc: "2.0", id: i * 3 + 1, method: "eth_call", params: [{ to: AERO_VE, data: MANAGED_TO_LOCKED_SEL + hexUint(managedId) }, "latest"] });
+        managedBatch.push({ jsonrpc: "2.0", id: i * 3 + 2, method: "eth_call", params: [{ to: AERO_VE, data: LOCKED_SEL + hexUint(managedId) }, "latest"] });
+        return [{ tokenId: id, managedId, managed: true, amount: 0, end: null, votingPower: null, pending: true, batchIndex: i }];
+      }
+      return [];
+    }
 
-    const votingPowerHex = res.find(r => r.id === i * 3 + 2)?.result;
+    const votingPowerHex = res.find(r => r.id === i * 4 + 2)?.result;
     const votingPower = votingPowerHex && votingPowerHex !== "0x"
       ? Number(BigInt(votingPowerHex)) / 1e18
       : null;
@@ -444,6 +463,44 @@ async function fetchAerodromeVeLocks(aeroPrice) {
       votingPower: votingPower != null ? roundToken(votingPower) : null,
     }];
   });
+
+  const managedRes = managedBatch.length ? await rpcCall("base", managedBatch) : [];
+  const earnedBatch = [];
+  const managedLocks = initialLocks.filter(l => l.pending).flatMap(l => {
+    if (!Array.isArray(managedRes)) return [];
+    const weightHex = managedRes.find(r => r.id === l.batchIndex * 3)?.result;
+    const lockedRewardHex = managedRes.find(r => r.id === l.batchIndex * 3 + 1)?.result;
+    const managedLockedHex = managedRes.find(r => r.id === l.batchIndex * 3 + 2)?.result;
+    const weight = weightHex && weightHex !== "0x" ? Number(BigInt(weightHex)) / 1e18 : 0;
+    if (!(weight > 0) || !lockedRewardHex || lockedRewardHex === "0x") return [];
+    const lockedReward = "0x" + lockedRewardHex.slice(-40);
+    earnedBatch.push({
+      jsonrpc: "2.0",
+      id: l.batchIndex,
+      method: "eth_call",
+      params: [{ to: lockedReward, data: EARNED_TOKEN_SEL + aeroHex + hexUint(l.tokenId) }, "latest"],
+    });
+    const mws = words(managedLockedHex);
+    const managedEnd = mws.length >= 2 ? Number(BigInt("0x" + mws[1])) : null;
+    return [{ ...l, amount: weight, end: managedEnd, lockedReward, pending: false }];
+  });
+
+  const earnedRes = earnedBatch.length ? await rpcCall("base", earnedBatch) : [];
+  const locks = initialLocks.filter(l => !l.pending).concat(managedLocks.map(l => {
+    const earnedHex = Array.isArray(earnedRes) ? earnedRes.find(r => r.id === l.batchIndex)?.result : null;
+    const managedEarned = earnedHex && earnedHex !== "0x" ? Number(BigInt(earnedHex)) / 1e18 : 0;
+    const amount = l.amount + managedEarned;
+    return {
+      tokenId: l.tokenId,
+      managedId: l.managedId,
+      managed: true,
+      amount: roundToken(amount),
+      baseAmount: roundToken(l.amount),
+      managedEarned: roundToken(managedEarned),
+      end: l.end,
+      votingPower: null,
+    };
+  }));
 
   const totalAero = locks.reduce((s, l) => s + l.amount, 0);
   if (!(totalAero > 0)) return [];
