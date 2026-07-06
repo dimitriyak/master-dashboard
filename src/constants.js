@@ -32,8 +32,8 @@ export const DEFI_INITIAL = [
   { id: 11,protocol: "Aerodrome",    network: "Base",         asset: "WETH/VVV",   invested: 300, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-weth-vvv", date: "2026-06-23" },
   { id: 12,protocol: "Aerodrome",    network: "Base",         asset: "veAERO Locks", invested: 0, current: 0, apy: 2.31, status: "active", type: "vault", color: "#5D7EFD", matchId: "aero-velocks", date: "2026-07-05" },
   { id: 13,protocol: "Aerodrome",    network: "Base",         asset: "WETH/AERO CL", invested: 213.86, current: 213.86, apy: 85.96, status: "active", type: "lp", color: "#5D7EFD", matchId: "aero-weth-aero-cl", date: "2026-07-04" },
+  { id: 15,protocol: "Aerodrome",    network: "Base",         asset: "USDC/AERO CL", invested: 340.82, current: 340.82, apy: 121.49, status: "active", type: "lp", color: "#5D7EFD", matchId: "aero-usdc-aero-cl", date: "2026-07-06" },
   { id: 6, protocol: "Lighter",      network: "Lighter",      asset: "Public Pools",invested: 185, current: 0, apy: 0, status: "active", type: "vault",   color: "#4B8BFF", matchId: "lighter-public-pools", date: "2026-06-14" },
-  { id: 8, protocol: "Loopscale",    network: "Solana",       asset: "ONyc Loop",   invested: 331.22, current: 331.22, apy: 0, status: "active", type: "vault",   color: "#6C63FF", matchId: "loopscale-loops", date: "2026-06-14" },
   { id: 14,protocol: "Loopscale",    network: "Solana",       asset: "OnRe Growth", invested: 99.78, current: 99.78, apy: 0, status: "active", type: "vault",   color: "#6C63FF", matchId: "loopscale-growth", date: "2026-06-14" },
 ];
 

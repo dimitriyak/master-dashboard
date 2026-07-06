@@ -103,6 +103,16 @@ const AERO_CL_POSITIONS = [
     t0: { dec: 18, price: "eth" },
     t1: { dec: 18, price: "aero" },
   },
+  {
+    id: "aero-usdc-aero-cl",
+    asset: "USDC/AERO CL",
+    nftManager: "0x827922686190790b37229fd06084350E74485b72",
+    tokenId: 72830782,
+    pool: "0xBE00fF35AF70E8415D0eB605a286D8A45466A4c1",
+    gauge: "0x430C09546ae9249AB75B9A4ef7B5FD9a4006D6f3",
+    t0: { dec: 6,  price: "stable" },
+    t1: { dec: 18, price: "aero" },
+  },
 ];
 
 const AERO_VE = "0xeBf418fe2512E7E6bd9b87a8F0f294acDc67e6B4";
@@ -123,6 +133,7 @@ const LLAMA_POOLS = [
   { posId: "aero-usdc-aero",            poolId: "d32f9c01-47d1-4077-8c73-8b91b08d1e91" },
   { posId: "aero-msusd-usdc-cl",         poolId: "aae6cc3a-783b-4a76-bea7-c3edccd28d62" },
   { posId: "aero-weth-aero-cl",          poolId: "3aebe700-db0b-49e2-82f6-564acdfae434" },
+  { posId: "aero-usdc-aero-cl",          poolId: "31ed7657-e02c-427b-8e3e-c0bf24e6cb9b" },
 ];
 
 const MANUAL_POSITIONS = [
