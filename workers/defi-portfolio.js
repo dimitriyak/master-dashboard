@@ -9,6 +9,7 @@ const CORS = {
 };
 
 const WALLET = "0x2d80f9BEf9dA5bc0C011d7239d31997528216aeC";
+const WALLET_TOKEN_MIN_USD = 5;
 
 // Multiple keyless endpoints per chain — rotated by rpcCall so one rate-limited (429) RPC
 // doesn't blank out a position. publicnode alone gets rate-limited by Cloudflare's shared IPs.
@@ -213,7 +214,8 @@ export default {
         wallet: WALLET,
         positions,
         prices,
-        walletTokens: [...walletTokens, ...nativeBalances].filter(p => p.balance >= 0.0001),
+        walletTokens: [...walletTokens, ...nativeBalances]
+          .filter(p => p.balance >= 0.0001 && (p.usdValue ?? 0) >= WALLET_TOKEN_MIN_USD),
         updated: new Date().toISOString(),
       });
     } catch (e) {
