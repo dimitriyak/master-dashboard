@@ -937,7 +937,9 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   const livePosData = positions.map(p => {
     // Lighter: fetch directly from browser (bypasses WAF that blocks CF Workers)
     if (p.matchId === "lighter-public-pools" && lighterLive) {
-      const subRows = (lighterLive.pools || []).map(pl => ({ label: pl.name, usd: pl.equity, apy: pl.apy }));
+      const subRows = (lighterLive.pools || [])
+        .filter(pl => (pl.equity ?? 0) > 0)
+        .map(pl => ({ label: pl.name, usd: pl.equity, apy: pl.apy }));
       return { ...p, invested: lighterLive.principal ?? p.invested, liveDollarValue: lighterLive.usdValue, liveApy: lighterLive.apy, liveRewards: null, subRows };
     }
     const chainPos = p.matchId
@@ -962,16 +964,18 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   // Claimable rewards (напр. AERO emissions) учитываются в стоимости позиции и в P&L.
   const rewardUsd = p => p.liveRewards?.aeroEarnedUsd ?? 0;
   const effectiveVal = p => p.liveDollarValue != null ? p.liveDollarValue + rewardUsd(p) : (p.type !== "debt" && p.type !== "airdrop" ? (p.current ?? 0) : 0);
-  const liveTotal   = livePosData.reduce((s, p) => s + effectiveVal(p), 0);
+  const hasExplicitZeroLiveBalance = p => p.liveDollarValue != null && Math.abs(effectiveVal(p)) < 0.01;
+  const visiblePosData = livePosData.filter(p => !hasExplicitZeroLiveBalance(p));
+  const liveTotal   = visiblePosData.reduce((s, p) => s + effectiveVal(p), 0);
   // Cost basis on the SAME net basis as liveTotal: debt nets out (borrowed sum reduces invested),
   // so the identity Портфель − Вложено = P&L always holds.
   const investedBasis = p => p.type === "debt"
     ? effectiveVal(p)                                        // debt: current (negative) → cancels in P&L
     : ((p.invested ?? 0) > 0 ? p.invested : effectiveVal(p)); // supply: cost basis (fallback to current)
-  const liveInvested = livePosData.reduce((s, p) => s + investedBasis(p), 0);
+  const liveInvested = visiblePosData.reduce((s, p) => s + investedBasis(p), 0);
   const livePnl      = liveTotal - liveInvested;
   const liveAvgApy  = (() => {
-    const active = livePosData.filter(p => p.liveApy != null && effectiveVal(p) > 0 && p.type !== "debt");
+    const active = visiblePosData.filter(p => p.liveApy != null && effectiveVal(p) > 0 && p.type !== "debt");
     const w = active.reduce((s, p) => s + effectiveVal(p), 0);
     return w > 0 ? active.reduce((s, p) => s + p.liveApy * effectiveVal(p) / w, 0) : 0;
   })();
@@ -982,7 +986,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
   // Group positions by protocol → one card per protocol, sorted by P&L (desc).
   const protocolGroups = (() => {
     const map = new Map();
-    for (const p of livePosData) {
+    for (const p of visiblePosData) {
       if (!map.has(p.protocol)) map.set(p.protocol, []);
       map.get(p.protocol).push(p);
     }
