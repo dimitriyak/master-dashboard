@@ -137,19 +137,6 @@ const LLAMA_POOLS = [
   { posId: "aero-usdc-aero-cl",          poolId: "31ed7657-e02c-427b-8e3e-c0bf24e6cb9b" },
 ];
 
-const MANUAL_POSITIONS = [
-  {
-    id: "loopscale-growth",
-    chain: "solana",
-    protocol: "Loopscale",
-    asset: "OnRe Growth",
-    balance: 99.78,
-    usdValue: 99.78,
-    type: "vault",
-    color: "#14F195",
-  },
-];
-
 async function fetchApys() {
   const results = await Promise.allSettled(
     LLAMA_POOLS.map(p =>
@@ -198,8 +185,7 @@ export default {
         .concat(hyperliquid)
         .concat(lighter)
         .concat(loopscale)
-        .concat(kodiak)
-        .concat(MANUAL_POSITIONS);
+        .concat(kodiak);
 
       // Attach APY from DeFiLlama where available
       const positions = allPositions.map(p => {
