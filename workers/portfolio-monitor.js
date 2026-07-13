@@ -311,8 +311,9 @@ async function recordHistory(env, { data, bybit }) {
     breakdown[`bybit:${coin}`] = { name: `Bybit ${coin}`, usd: c.usd };
 
   const defiTotal = data.positions.reduce((s, p) => s + posVal(p), 0);
-  const total = defiTotal + (bybit?.equity || 0);
-  const entry = { date: day, total, defi: defiTotal, bybit: bybit?.equity || 0, bybitOk: !!bybit && !bybit.stale, breakdown };
+  const bybitEquity = (bybit?.equity || 0) >= MIN_TRACKED_BYBIT_USD ? bybit.equity : 0;
+  const total = defiTotal + bybitEquity;
+  const entry = { date: day, total, defi: defiTotal, bybit: bybitEquity, bybitOk: !!bybit && !bybit.stale, breakdown };
 
   // Do not overwrite a sane daily point with a partial outage snapshot.
   if (looksLikePartialHistory(entry, prev)) return { ...prev, skipped: true, reason: "partial snapshot ignored" };
