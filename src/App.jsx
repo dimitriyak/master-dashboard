@@ -8,6 +8,7 @@ import {
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const CARD_SHADOW = "inset 0 1px 0 rgba(255,255,255,0.03), 0 8px 24px rgba(0,0,0,0.35)";
+const MIN_VISIBLE_BYBIT_USD = 5;
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 let _toastFn = null;
@@ -74,7 +75,8 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
   const [claudeStats, setClaudeStats] = useState(null);
   const [bybitBalance, setBybitBalance] = useState(() => {
     const h = (() => { try { return JSON.parse(localStorage.getItem("bybit_history")) || []; } catch { return []; } })();
-    return h.length ? h[h.length - 1].balance : null;
+    const last = h.length ? h[h.length - 1].balance : null;
+    return last >= MIN_VISIBLE_BYBIT_USD ? last : null;
   });
   const [liveDefiCurrent, setLiveDefiCurrent] = useState(null);
   const [rabbyIdle, setRabbyIdle] = useState(0);
@@ -84,7 +86,7 @@ function Overview({ wishState, defiPositions, defiHw, wayData, nwData, onNavigat
       .then(r => r.json()).then(d => setClaudeStats(d.value)).catch(() => {});
     fetch(BYBIT_PROXY_URL).then(r => r.json()).then(d => {
       const eq = parseFloat(d?.result?.list?.[0]?.totalEquity);
-      if (!isNaN(eq)) setBybitBalance(eq);
+      if (!isNaN(eq)) setBybitBalance(eq >= MIN_VISIBLE_BYBIT_USD ? eq : null);
     }).catch(() => {});
     // Живой DeFi-тотал прямо из воркера — чтобы не зависеть от кэша current,
     // который обновляется только при заходе на страницу DeFi.
@@ -899,15 +901,16 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
           }
         }));
         const coins = account.coin
-          .filter(c => parseFloat(c.usdValue) >= 1)
+          .filter(c => parseFloat(c.usdValue) >= MIN_VISIBLE_BYBIT_USD)
           .sort((a, b) => parseFloat(b.usdValue) - parseFloat(a.usdValue));
         const equity = parseFloat(account.totalEquity) + extra;
-        setBybit({ totalEquity: equity, coins });
+        const visibleEquity = equity >= MIN_VISIBLE_BYBIT_USD ? equity : 0;
+        setBybit(visibleEquity > 0 ? { totalEquity: visibleEquity, coins } : null);
         // Сохраняем снапшот (один в день)
         const today = new Date().toISOString().slice(0, 10);
         setBybitHistory(prev => {
           const filtered = prev.filter(e => e.date !== today);
-          const next = [...filtered, { date: today, balance: equity }].slice(-60);
+          const next = [...filtered, { date: today, balance: visibleEquity }].slice(-60);
           lsSet("bybit_history", next);
           return next;
         });
@@ -1078,7 +1081,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
               {[
-                bybit ? ["Bybit", bybit.totalEquity] : null,
+                bybit?.totalEquity >= MIN_VISIBLE_BYBIT_USD ? ["Bybit", bybit.totalEquity] : null,
                 liveTotal > 0 ? ["DeFi", liveTotal] : null,
                 rabbyIdle >= 1 ? ["Rabby", rabbyIdle] : null,
               ].filter(Boolean).map(([lbl, v]) => (
@@ -1089,6 +1092,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
             </div>
           </div>
 
+          {bybit?.totalEquity >= MIN_VISIBLE_BYBIT_USD && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1136,6 +1140,7 @@ function DefiDashboard({ positions, setPositions, hwChecked, setHwChecked }) {
               </>
             )}
           </div>
+          )}
         </div>
       )}
 

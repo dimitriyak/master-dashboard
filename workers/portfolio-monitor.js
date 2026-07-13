@@ -24,6 +24,7 @@ const HF_WARN        = 1.6;   // health factor warn / urgent
 const HF_URGENT      = 1.25;
 const LOOP_LTV_WARN  = 0.85;  // Loopscale loan principal/collateral
 const STABLE_DEPEG   = 0.99;  // alert if a stablecoin trades below this
+const MIN_TRACKED_BYBIT_USD = 5;
 
 const USDC_ETH = "ethereum:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
@@ -65,12 +66,12 @@ async function repriceBybitCoins(coins) {
     const fallback = c.usd && amt ? c.usd / amt : null;
     const price = await bybitCoinPrice(coin, fallback);
     const usd = price ? amt * price : Number(c.usd) || 0;
-    if (usd >= 1) {
+    if (usd >= MIN_TRACKED_BYBIT_USD) {
       out[coin] = { amt, usd };
       equity += usd;
     }
   }
-  return Object.keys(out).length ? { equity, coins: out, stale: true } : null;
+  return { equity: equity >= MIN_TRACKED_BYBIT_USD ? equity : 0, coins: out, stale: true };
 }
 
 // Bybit: total equity (corrected for unpriced tokens) + per-coin map {coin:{amt,usd}}.
@@ -89,12 +90,11 @@ async function getBybit(env) {
       const p = pr?.coins?.[PRICE_FIX[c.coin]]?.price;
       if (p > 0) { equity += amt * p - usd; usd = amt * p; }
     }
-    if (usd >= 1) coins[c.coin] = { amt, usd };
+    if (usd >= MIN_TRACKED_BYBIT_USD) coins[c.coin] = { amt, usd };
   }
-  const result = { equity, coins, stale: false };
-  if (Object.keys(coins).length) {
-    await env.STATE.put("bybit:last-good", JSON.stringify({ ts: Date.now(), coins }), { expirationTtl: 604800 });
-  }
+  const visibleEquity = Object.values(coins).reduce((s, c) => s + c.usd, 0);
+  const result = { equity: visibleEquity >= MIN_TRACKED_BYBIT_USD ? visibleEquity : 0, coins, stale: false };
+  await env.STATE.put("bybit:last-good", JSON.stringify({ ts: Date.now(), coins }), { expirationTtl: 604800 });
   return result;
 }
 
@@ -312,7 +312,7 @@ async function recordHistory(env, { data, bybit }) {
 
   const defiTotal = data.positions.reduce((s, p) => s + posVal(p), 0);
   const total = defiTotal + (bybit?.equity || 0);
-  const entry = { date: day, total, defi: defiTotal, bybit: bybit?.equity || 0, breakdown };
+  const entry = { date: day, total, defi: defiTotal, bybit: bybit?.equity || 0, bybitOk: !!bybit && !bybit.stale, breakdown };
 
   // Do not overwrite a sane daily point with a partial outage snapshot.
   if (looksLikePartialHistory(entry, prev)) return { ...prev, skipped: true, reason: "partial snapshot ignored" };
@@ -341,7 +341,7 @@ async function latestHistory(env) {
 
 function looksLikePartialHistory(entry, prev) {
   if (!entry || !prev) return false;
-  if ((prev.bybit || 0) > 100 && (entry.bybit || 0) === 0) return true;
+  if ((prev.bybit || 0) > 100 && (entry.bybit || 0) === 0 && !entry.bybitOk) return true;
   if ((prev.defi || 0) > 100 && (entry.defi || 0) < prev.defi * 0.75) return true;
   return false;
 }
@@ -349,7 +349,7 @@ function looksLikePartialHistory(entry, prev) {
 function filterBadHistory(entries) {
   const hasBybit = entries.some(e => (e.bybit || 0) > 100);
   return entries.filter((e, i) => {
-    if (hasBybit && (e.bybit || 0) === 0) return false;
+    if (hasBybit && (e.bybit || 0) === 0 && !e.bybitOk) return false;
     const prev = entries.slice(0, i).reverse().find(x => x && x.defi > 100);
     if (looksLikePartialHistory(e, prev)) return false;
     return true;
