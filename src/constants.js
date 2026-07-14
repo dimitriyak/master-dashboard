@@ -28,11 +28,9 @@ export const WISH_CATEGORIES = [
 export const DEFI_INITIAL = [
   { id: 1, protocol: "Aerodrome",    network: "Base",         asset: "msUSD/USDC CL", invested: 400.49, current: 400.49, apy: 7.55, status: "active", type: "lp", color: "#5D7EFD", matchId: "aero-msusd-usdc-cl", date: "2026-07-04" },
   { id: 2, protocol: "Aerodrome",    network: "Base",         asset: "USDC/WETH",  invested: 400, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-usdc-weth", date: "2026-06-13", costBasis: [{ t: "WETH", qty: 0.12, p0: 1666.89 }] },
-  { id: 10,protocol: "Aerodrome",    network: "Base",         asset: "USDC/AERO",  invested: 514.54, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-usdc-aero", date: "2026-06-15", costBasis: [{ t: "AERO", qty: 521.081408, p0: 0.48098 }] },
+  { id: 10,protocol: "Aerodrome",    network: "Base",         asset: "USDC/AERO",  invested: 1069.22, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-usdc-aero", date: "2026-07-14" },
   { id: 11,protocol: "Aerodrome",    network: "Base",         asset: "WETH/VVV",   invested: 300, current: 0, apy: 0, status: "active", type: "lp",      color: "#5D7EFD", matchId: "aero-weth-vvv", date: "2026-06-23" },
   { id: 12,protocol: "Aerodrome",    network: "Base",         asset: "veAERO Locks", invested: 0, current: 0, apy: 2.31, status: "active", type: "vault", color: "#5D7EFD", matchId: "aero-velocks", date: "2026-07-05" },
-  { id: 13,protocol: "Aerodrome",    network: "Base",         asset: "WETH/AERO CL", invested: 213.86, current: 213.86, apy: 85.96, status: "active", type: "lp", color: "#5D7EFD", matchId: "aero-weth-aero-cl", date: "2026-07-04" },
-  { id: 15,protocol: "Aerodrome",    network: "Base",         asset: "USDC/AERO CL", invested: 340.82, current: 340.82, apy: 121.49, status: "active", type: "lp", color: "#5D7EFD", matchId: "aero-usdc-aero-cl", date: "2026-07-06" },
   { id: 6, protocol: "Lighter",      network: "Lighter",      asset: "Public Pools",invested: 185, current: 0, apy: 0, status: "active", type: "vault",   color: "#4B8BFF", matchId: "lighter-public-pools", date: "2026-06-14" },
 ];
 
