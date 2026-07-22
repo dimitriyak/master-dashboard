@@ -1,10 +1,9 @@
 /**
  * Cloudflare Worker: Portfolio Monitor
- * Cron-driven monitoring of the DeFi portfolio → Telegram (@dimitriyakclaude_bot).
+ * Cron-driven daily history snapshots for the DeFi portfolio.
  *
  * Crons (wrangler triggers):
- *   - "*\/30 * * * *"  → runAlerts  (liquidation risk, big swings, depeg)
- *   - "0 6 * * *"      → runDigest  (daily AI summary + 1-3 ideas via ai-proxy)
+ *   - "0 6 * * *"      → runDailySnapshot  (updates chart history, no Telegram)
  *
  * Secrets:  TELEGRAM_BOT_TOKEN
  * Vars:     TELEGRAM_CHAT_ID
@@ -25,6 +24,7 @@ const HF_URGENT      = 1.25;
 const LOOP_LTV_WARN  = 0.85;  // Loopscale loan principal/collateral
 const STABLE_DEPEG   = 0.99;  // alert if a stablecoin trades below this
 const MIN_TRACKED_BYBIT_USD = 5;
+const TELEGRAM_NOTIFICATIONS_ENABLED = false;
 
 const USDC_ETH = "ethereum:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
@@ -104,6 +104,7 @@ async function getBybitEquity(env) {
 }
 
 async function sendTelegram(env, html) {
+  if (!TELEGRAM_NOTIFICATIONS_ENABLED) return { ok: true, skipped: true, reason: "telegram notifications disabled" };
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return { ok: false, error: "no token/chat" };
   const r = await tfetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
@@ -392,14 +393,20 @@ async function runDigest(env) {
   return { ok: res.ok, sent: true };
 }
 
+async function runDailySnapshot(env) {
+  const [data, bybit] = await Promise.all([getPortfolio(env), getBybit(env)]);
+  if (!data) return { ok: false, error: "no portfolio data" };
+  const entry = await recordHistory(env, { data, bybit });
+  return { ok: true, snapshot: entry };
+}
+
 function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 export default {
   async scheduled(event, env) {
-    if (event.cron === "0 6 * * *") await runDigest(env);
-    else await runAlerts(env);
+    if (event.cron === "0 6 * * *") await runDailySnapshot(env);
   },
   async fetch(req, env) {
     const run = new URL(req.url).searchParams.get("run");

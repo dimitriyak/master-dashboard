@@ -3,7 +3,7 @@
   "main": "portfolio-monitor.js",
   "compatibility_date": "2024-01-01",
   "triggers": {
-    "crons": ["*/30 * * * *", "0 6 * * *"]
+    "crons": ["0 6 * * *"]
   },
   "kv_namespaces": [
     { "binding": "STATE", "id": "7c31632e3f684e75affda33aa3d4bd21" }
